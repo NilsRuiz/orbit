@@ -22,7 +22,7 @@ jobs:
             terraform -chdir="$d" validate
             echo "::endgroup::"
           done
-      - uses: terraform-linters/setup-tflint@v4
+      - uses: terraform-linters/setup-tflint@v6
       - run: tflint --recursive --chdir infra/terraform
       - name: checkov (security misconfigurations)
         run: pipx run checkov -d infra/terraform --quiet --compact --soft-fail
