@@ -35,7 +35,7 @@ jobs:
       - run: go mod verify
       - run: go vet ./...
       - run: go test -race -coverprofile=coverage.out ./...
-      - uses: golangci/golangci-lint-action@v8
+      - uses: golangci/golangci-lint-action@v9
         with:
           working-directory: agent
 
