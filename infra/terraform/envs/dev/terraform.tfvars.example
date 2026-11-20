@@ -1,0 +1,12 @@
+project_id        = "my-orbit-project"
+state_bucket      = "my-orbit-project-orbit-tfstate"
+github_repository = "my-github-user/orbit"
+
+# Restrict the Kubernetes API to your own IP (recommended):
+# master_authorized_cidrs = ["203.0.113.10/32"]
+
+# edge_nodes = {
+#   sat-1 = {}
+#   sat-2 = {}
+#   sat-3 = { machine_type = "e2-micro" }
+# }

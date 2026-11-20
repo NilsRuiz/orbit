@@ -1,0 +1,31 @@
+name: Bug
+description: Something does not behave as expected
+labels: ["type/bug"]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: Observed behaviour, logs (no secrets), affected node(s).
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behaviour
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: Ideally with the local fleet (make dev-up, make link-cut …).
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options: [agent, operator, infra, gitops, hack, ci]
+    validations:
+      required: true

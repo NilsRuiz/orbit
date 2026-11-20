@@ -1,0 +1,99 @@
+# Local fleet: 1 hub + 3 edge nodes, no Kubernetes needed (phase 1).
+#
+#   agent-sat-N ──(local net)── leaf-sat-N ──(orbit-net = "space link")── hub
+#
+# Cutting a leaf from orbit-net simulates a satellite going out of range while the agent
+# keeps talking to its local leaf node.
+
+x-agent: &agent
+  build: ../../agent
+  restart: unless-stopped
+  environment: &agent-env
+    ORBIT_HEARTBEAT_INTERVAL: 5s
+    ORBIT_VERIFY_TIMEOUT: 15s
+    ORBIT_SIM_BAD_VERSIONS: "6.6.6"
+    ORBIT_LOG_LEVEL: info
+
+x-leaf: &leaf
+  image: nats:2.11-alpine
+  command: ["-c", "/etc/nats/leaf.conf"]
+  volumes:
+    - ./nats/leaf.conf:/etc/nats/leaf.conf:ro
+  depends_on: [hub]
+  restart: unless-stopped
+
+services:
+  hub:
+    image: nats:2.11-alpine
+    container_name: orbit-hub
+    command: ["-c", "/etc/nats/hub.conf"]
+    volumes:
+      - ./nats/hub.conf:/etc/nats/hub.conf:ro
+      - hub-data:/data
+    ports:
+      - "4222:4222"   # clients
+      - "8222:8222"   # monitoring (http://localhost:8222)
+    networks:
+      orbit-net:
+        aliases: [hub]
+
+  # ---------------------------------------------------------------- sat-1
+  leaf-sat-1:
+    <<: *leaf
+    container_name: orbit-leaf-sat-1
+    networks: [orbit-net, sat-1-local]
+  agent-sat-1:
+    <<: *agent
+    container_name: orbit-agent-sat-1
+    environment:
+      <<: *agent-env
+      ORBIT_NODE_ID: sat-1
+      ORBIT_NATS_URL: nats://leaf-sat-1:4222
+    volumes: [sat-1-state:/var/lib/orbit]
+    networks: [sat-1-local]
+    depends_on: [leaf-sat-1]
+
+  # ---------------------------------------------------------------- sat-2
+  leaf-sat-2:
+    <<: *leaf
+    container_name: orbit-leaf-sat-2
+    networks: [orbit-net, sat-2-local]
+  agent-sat-2:
+    <<: *agent
+    container_name: orbit-agent-sat-2
+    environment:
+      <<: *agent-env
+      ORBIT_NODE_ID: sat-2
+      ORBIT_NATS_URL: nats://leaf-sat-2:4222
+    volumes: [sat-2-state:/var/lib/orbit]
+    networks: [sat-2-local]
+    depends_on: [leaf-sat-2]
+
+  # ---------------------------------------------------------------- sat-3
+  leaf-sat-3:
+    <<: *leaf
+    container_name: orbit-leaf-sat-3
+    networks: [orbit-net, sat-3-local]
+  agent-sat-3:
+    <<: *agent
+    container_name: orbit-agent-sat-3
+    environment:
+      <<: *agent-env
+      ORBIT_NODE_ID: sat-3
+      ORBIT_NATS_URL: nats://leaf-sat-3:4222
+    volumes: [sat-3-state:/var/lib/orbit]
+    networks: [sat-3-local]
+    depends_on: [leaf-sat-3]
+
+networks:
+  orbit-net:
+    name: orbit-net
+  sat-1-local: {}
+  sat-2-local: {}
+  sat-3-local: {}
+
+volumes:
+  hub-data: {}
+  sat-1-state: {}
+  sat-2-state: {}
+  sat-3-state: {}

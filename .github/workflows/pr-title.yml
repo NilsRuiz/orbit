@@ -1,0 +1,42 @@
+# With squash merge, the PR title becomes the commit on main: it must follow
+# Conventional Commits so release-please can compute versions and changelogs.
+name: pr-title
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+permissions:
+  pull-requests: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: amannn/action-semantic-pull-request@v5
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          types: |
+            feat
+            fix
+            perf
+            refactor
+            test
+            docs
+            build
+            ci
+            chore
+            revert
+          scopes: |
+            agent
+            operator
+            infra
+            gitops
+            hack
+            ci
+            docs
+            deps
+          requireScope: false
+          subjectPattern: ^[a-z].+[^.]$
+          subjectPatternError: "Subject must start lower case and not end with a period."

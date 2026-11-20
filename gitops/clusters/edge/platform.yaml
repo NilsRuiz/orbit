@@ -1,0 +1,38 @@
+# Shared by all edge clusters. Per-node values come from the `orbit-node` ConfigMap
+# created at bootstrap time (see gitops/README.md).
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: nats-leaf
+  namespace: flux-system
+spec:
+  interval: 10m
+  path: ./gitops/platform/nats-leaf
+  prune: true
+  wait: true
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  postBuild:
+    substituteFrom:
+      - kind: ConfigMap
+        name: orbit-node
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: payload
+  namespace: flux-system
+spec:
+  dependsOn:
+    - name: nats-leaf
+  interval: 10m
+  path: ./gitops/apps/payload
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  postBuild:
+    substituteFrom:
+      - kind: ConfigMap
+        name: orbit-node

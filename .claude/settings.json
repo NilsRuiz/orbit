@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "allow": [
+      "Bash(make verify*)",
+      "Bash(make agent-test*)",
+      "Bash(go test *)",
+      "Bash(go vet *)",
+      "Bash(go build *)",
+      "Bash(go mod tidy*)",
+      "Bash(gofmt *)",
+      "Bash(golangci-lint run*)",
+      "Bash(terraform fmt*)",
+      "Bash(terraform validate*)",
+      "Bash(terraform plan*)",
+      "Bash(tflint*)",
+      "Bash(shellcheck *)",
+      "Bash(git status*)",
+      "Bash(git diff*)",
+      "Bash(git log*)",
+      "Bash(git branch*)",
+      "Bash(git show*)",
+      "Bash(gh pr view*)",
+      "Bash(gh pr checks*)",
+      "Bash(gh run view*)",
+      "Bash(gh issue view*)"
+    ],
+    "ask": [
+      "Bash(git push*)",
+      "Bash(git rebase*)",
+      "Bash(git reset*)",
+      "Bash(gh pr create*)",
+      "Bash(gh issue create*)",
+      "Bash(docker *)"
+    ],
+    "deny": [
+      "Bash(terraform apply*)",
+      "Bash(terraform destroy*)",
+      "Bash(gh pr merge*)",
+      "Read(**/.env*)",
+      "Read(**/*.pem)",
+      "Read(**/*.key)",
+      "Read(**/*.creds)",
+      "Read(**/*.tfstate*)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/guard-bash.sh"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/format.sh"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,30 @@
+name: Feature
+description: New capability or improvement
+labels: ["type/feature"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What problem does this solve, and for whom (fleet operator, SRE on call…)?
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: Observable, testable conditions. "Given … when … then …".
+    validations:
+      required: true
+  - type: textarea
+    id: notes
+    attributes:
+      label: Design notes
+      description: Options considered, ADR needed?
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options: [agent, operator, infra, gitops, hack, ci]
+    validations:
+      required: true

@@ -1,0 +1,86 @@
+name: agent
+
+on:
+  pull_request:
+    paths: ["agent/**", ".github/workflows/agent.yml"]
+  push:
+    branches: [main]
+    paths: ["agent/**", ".github/workflows/agent.yml"]
+    tags: ["agent-v*"]   # created by release-please
+
+permissions:
+  contents: read
+
+concurrency:
+  group: agent-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  IMAGE: ghcr.io/${{ github.repository_owner }}/orbit-agent
+
+# Security note: pin third-party actions to a full commit SHA (Dependabot keeps them
+# up to date). Tags are mutable and have been hijacked in real supply-chain attacks.
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: agent
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: agent/go.mod
+          cache-dependency-path: agent/go.sum
+      - run: go mod verify
+      - run: go vet ./...
+      - run: go test -race -coverprofile=coverage.out ./...
+      - uses: golangci/golangci-lint-action@v8
+        with:
+          working-directory: agent
+
+  image:
+    needs: test
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write   # push to GHCR
+      id-token: write   # keyless cosign signing (OIDC)
+    steps:
+      - uses: actions/checkout@v4
+      - id: tags
+        name: Compute image tags
+        run: |
+          tags="${IMAGE}:sha-${GITHUB_SHA}"
+          if [[ "$GITHUB_REF" == refs/tags/agent-v* ]]; then
+            tags="${tags},${IMAGE}:${GITHUB_REF_NAME#agent-v}"
+          else
+            tags="${tags},${IMAGE}:main"
+          fi
+          echo "tags=${tags}" >> "$GITHUB_OUTPUT"
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: agent
+          platforms: linux/amd64,linux/arm64   # edge hardware is often ARM
+          push: true
+          tags: ${{ steps.tags.outputs.tags }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: true
+          sbom: true
+      - uses: sigstore/cosign-installer@v3
+      - name: Sign image (keyless)
+        run: cosign sign --yes "${IMAGE}@${{ steps.build.outputs.digest }}"
+      - name: Scan image
+        run: |
+          docker run --rm aquasec/trivy:latest image --exit-code 1 --severity CRITICAL,HIGH \
+            --ignore-unfixed "${IMAGE}@${{ steps.build.outputs.digest }}"

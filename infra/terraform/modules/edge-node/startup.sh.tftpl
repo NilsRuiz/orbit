@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+# Rendered by Terraform. Installs a pinned k3s single-node cluster on first boot.
+set -euo pipefail
+
+if command -v k3s >/dev/null 2>&1; then
+  echo "k3s already installed, skipping"
+  exit 0
+fi
+
+curl -sfL https://get.k3s.io | \
+  INSTALL_K3S_VERSION="${k3s_version}" \
+  INSTALL_K3S_EXEC="server --disable traefik --node-label orbit.io/node-id=${node_id} --write-kubeconfig-mode 0640" \
+  sh -
+
+# Flux is bootstrapped afterwards from CI / hack/scripts (needs a GitHub token, never
+# stored in VM metadata).
+echo "orbit edge node ${node_id} ready"

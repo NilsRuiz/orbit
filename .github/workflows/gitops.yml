@@ -1,0 +1,30 @@
+name: gitops
+
+on:
+  pull_request:
+    paths: ["gitops/**", ".github/workflows/gitops.yml"]
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install kustomize and kubeconform
+        run: |
+          go install sigs.k8s.io/kustomize/kustomize/v5@latest
+          go install github.com/yannh/kubeconform/cmd/kubeconform@latest
+          echo "$HOME/go/bin" >> "$GITHUB_PATH"
+      - name: Build and validate every kustomization
+        run: |
+          set -euo pipefail
+          for k in $(find gitops -name kustomization.yaml -exec dirname {} \;); do
+            echo "::group::$k"
+            kustomize build "$k" | kubeconform -strict -summary \
+              -ignore-missing-schemas \
+              -schema-location default \
+              -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json'
+            echo "::endgroup::"
+          done

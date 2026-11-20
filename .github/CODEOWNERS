@@ -1,0 +1,5 @@
+# Replace @your-github-user with your GitHub username. Reviews from code owners can be made
+# mandatory in the branch ruleset ("Require review from Code Owners").
+*                   @your-github-user
+/infra/terraform/   @your-github-user
+/.github/           @your-github-user

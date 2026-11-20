@@ -1,0 +1,26 @@
+# What a release looks like in Git: one PR changing targetVersion.
+apiVersion: fleet.orbit.io/v1alpha1
+kind: Fleet
+metadata:
+  name: constellation-alpha
+spec:
+  selector:
+    matchLabels:
+      orbit.io/constellation: alpha
+---
+apiVersion: fleet.orbit.io/v1alpha1
+kind: Rollout
+metadata:
+  name: payload
+spec:
+  fleetRef: constellation-alpha
+  targetVersion: "1.2.0"
+  waves:
+    - percent: 10
+      pauseFor: 10m
+    - percent: 50
+      pauseFor: 30m
+    - percent: 100
+  healthGate:
+    maxFailurePercent: 0
+    timeout: 15m

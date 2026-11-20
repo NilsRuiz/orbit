@@ -1,0 +1,65 @@
+name: terraform
+
+on:
+  pull_request:
+    paths: ["infra/terraform/**", ".github/workflows/terraform.yml"]
+
+permissions:
+  contents: read
+
+jobs:
+  static:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+      - run: terraform fmt -check -recursive infra/terraform
+      - name: validate modules and envs (no backend)
+        run: |
+          for d in infra/terraform/modules/* infra/terraform/envs/* infra/terraform/bootstrap; do
+            echo "::group::$d"
+            terraform -chdir="$d" init -backend=false -input=false
+            terraform -chdir="$d" validate
+            echo "::endgroup::"
+          done
+      - uses: terraform-linters/setup-tflint@v4
+      - run: tflint --recursive --chdir infra/terraform
+      - name: checkov (security misconfigurations)
+        run: pipx run checkov -d infra/terraform --quiet --compact --soft-fail
+
+  plan:
+    needs: static
+    runs-on: ubuntu-latest
+    # Requires repository variables set from `terraform output` (see infra/terraform/README.md).
+    if: vars.GCP_WIF_PROVIDER != ''
+    permissions:
+      contents: read
+      id-token: write        # OIDC → GCP Workload Identity Federation, no JSON key
+      pull-requests: write   # comment the plan
+    defaults:
+      run:
+        working-directory: infra/terraform/envs/dev
+    steps:
+      - uses: actions/checkout@v4
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_CI_SA }}
+      - uses: hashicorp/setup-terraform@v3
+      - run: terraform init -input=false -backend-config="bucket=${{ vars.GCP_STATE_BUCKET }}"
+      - id: plan
+        run: |
+          terraform plan -input=false -no-color -lock=false \
+            -var project_id=${{ vars.GCP_PROJECT_ID }} \
+            -var state_bucket=${{ vars.GCP_STATE_BUCKET }} \
+            -var github_repository=${{ github.repository }} | tee plan.txt
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const plan = fs.readFileSync('infra/terraform/envs/dev/plan.txt', 'utf8').slice(-60000);
+            await github.rest.issues.createComment({
+              ...context.repo,
+              issue_number: context.issue.number,
+              body: "### Terraform plan (dev)\n```\n" + plan + "\n```",
+            });

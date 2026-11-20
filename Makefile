@@ -1,0 +1,97 @@
+SHELL := /usr/bin/env bash
+.DEFAULT_GOAL := help
+
+COMPOSE := docker compose -f hack/compose/docker-compose.yml
+NATS_BOX := docker run --rm --network orbit-net natsio/nats-box:latest
+TF_ENV ?= dev
+TF_DIR := infra/terraform/envs/$(TF_ENV)
+
+##@ Help
+help: ## Show this help
+	@awk 'BEGIN {FS = ":.*##"} /^[a-zA-Z_-]+:.*##/ {printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2} /^##@/ {printf "\n\033[1m%s\033[0m\n", substr($$0, 5)}' $(MAKEFILE_LIST)
+
+##@ Quality gates (same checks as CI)
+verify: verify-go verify-tf verify-gitops verify-shell ## Run every quality gate
+
+verify-go: ## gofmt, go vet, golangci-lint, go test -race (agent; operator once scaffolded)
+	@for m in agent operator; do \
+	  [ -f $$m/go.mod ] || continue; \
+	  echo "==> $$m"; \
+	  ( cd $$m && test -z "$$(gofmt -l .)" || { gofmt -l .; echo "gofmt needed"; exit 1; } ) || exit 1; \
+	  ( cd $$m && go vet ./... && go test -race -count=1 ./... ) || exit 1; \
+	  if command -v golangci-lint >/dev/null; then (cd $$m && golangci-lint run) || exit 1; \
+	  else echo "⚠️  golangci-lint not installed: lint NOT verified"; fi; \
+	done
+
+verify-tf: ## terraform fmt -check, validate (no backend), tflint
+	terraform fmt -check -recursive infra/terraform
+	@for d in infra/terraform/modules/* infra/terraform/envs/* infra/terraform/bootstrap; do \
+	  echo "==> $$d"; \
+	  terraform -chdir=$$d init -backend=false -input=false >/dev/null && terraform -chdir=$$d validate || exit 1; \
+	done
+	@if command -v tflint >/dev/null; then tflint --recursive --chdir infra/terraform; \
+	else echo "⚠️  tflint not installed: lint NOT verified"; fi
+
+verify-gitops: ## kustomize build | kubeconform for every kustomization
+	@if ! command -v kustomize >/dev/null || ! command -v kubeconform >/dev/null; then \
+	  echo "⚠️  kustomize/kubeconform not installed: gitops NOT verified"; exit 0; fi; \
+	for k in $$(find gitops -name kustomization.yaml -exec dirname {} \;); do \
+	  echo "==> $$k"; kustomize build $$k | kubeconform -strict -summary -ignore-missing-schemas || exit 1; \
+	done
+
+verify-shell: ## shellcheck all scripts
+	shellcheck hack/scripts/*.sh hack/k3d/*.sh .claude/hooks/*.sh
+
+##@ Agent
+agent-test: ## Run agent unit tests
+	cd agent && go test -race ./...
+
+agent-lint: ## Lint agent (requires golangci-lint)
+	cd agent && golangci-lint run
+
+agent-build: ## Build agent binary
+	cd agent && CGO_ENABLED=0 go build -o ../bin/orbit-agent ./cmd/orbit-agent
+
+##@ Local fleet (docker compose)
+dev-up: ## Start hub NATS + 3 edge leaf nodes + 3 agents
+	@test -f agent/go.sum || (cd agent && go mod tidy)
+	$(COMPOSE) up -d --build
+	@./hack/scripts/init-hub.sh
+
+dev-down: ## Stop local fleet
+	$(COMPOSE) down -v
+
+logs: ## Follow agent logs
+	$(COMPOSE) logs -f agent-sat-1 agent-sat-2 agent-sat-3
+
+desired: ## Set desired version: make desired NODE=sat-1 VERSION=1.1.0
+	@test -n "$(NODE)" -a -n "$(VERSION)" || (echo "usage: make desired NODE=sat-1 VERSION=1.1.0"; exit 1)
+	$(NATS_BOX) nats --server nats://hub:4222 kv put orbit-desired $(NODE) '{"version":"$(VERSION)","rolloutId":"manual"}'
+
+status: ## Show last status messages
+	$(NATS_BOX) nats --server nats://hub:4222 stream view ORBIT_STATUS
+
+link-cut: ## Cut the link of an edge node: make link-cut NODE=sat-2
+	./hack/scripts/link.sh cut $(NODE)
+
+link-restore: ## Restore the link of an edge node
+	./hack/scripts/link.sh restore $(NODE)
+
+link-degrade: ## Add latency/loss on an edge link: make link-degrade NODE=sat-2
+	./hack/scripts/link.sh degrade $(NODE)
+
+##@ Infrastructure
+tf-fmt: ## Format Terraform
+	terraform fmt -recursive infra/terraform
+
+tf-plan: ## Terraform plan (TF_ENV=dev)
+	terraform -chdir=$(TF_DIR) init -input=false && terraform -chdir=$(TF_DIR) plan
+
+tf-apply: ## Terraform apply (TF_ENV=dev)
+	terraform -chdir=$(TF_DIR) apply
+
+tf-destroy: ## Destroy everything — run after each demo session!
+	terraform -chdir=$(TF_DIR) destroy
+
+.PHONY: help verify verify-go verify-tf verify-gitops verify-shell agent-test agent-lint agent-build dev-up dev-down logs desired status \
+        link-cut link-restore link-degrade tf-fmt tf-plan tf-apply tf-destroy

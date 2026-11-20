@@ -1,0 +1,28 @@
+/bin/
+*.exe
+*.test
+*.out
+coverage.*
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+crash.log
+.terraform.lock.hcl.bak
+
+# Secrets
+*.pem
+*.key
+*.creds
+.env
+
+# Editors
+.idea/
+.vscode/
+.DS_Store
+
+# Claude Code personal settings
+.claude/settings.local.json
