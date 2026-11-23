@@ -1,5 +1,7 @@
 # syntax=docker/dockerfile:1
-FROM --platform=$BUILDPLATFORM golang:1.24 AS build
+# Keep in sync with the toolchain directive in go.mod: the stdlib compiled into the binary
+# comes from this image, and trivy scans it.
+FROM --platform=$BUILDPLATFORM golang:1.26.10 AS build
 ARG TARGETOS TARGETARCH
 WORKDIR /src
 COPY go.mod go.sum ./
