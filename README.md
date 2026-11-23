@@ -10,9 +10,12 @@
 ## Why this project
 
 Edge nodes are many, far away, resource-constrained and only **intermittently connected**
-(a LEO satellite sees a ground station a few minutes per orbit). Classic push-based
-deployment tooling assumes the opposite. Orbit explores what a reliable platform for that
-world looks like:
+(a LEO satellite sees a ground station a few minutes per orbit). Push-based deployment
+tooling assumes the opposite: that every target is reachable, through an inbound
+connection, at the moment the central system decides to deploy. Orbit inverts this: the
+hub only publishes desired state, and each node pulls and converges whenever its link is up.
+
+Orbit explores what a reliable platform for that world looks like:
 
 - **Intent in Git, orchestration in an operator** — Git declares *what* the fleet should
   run; a Go Kubernetes operator decides *how*: waves, health gates, automatic rollback.
