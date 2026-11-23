@@ -50,6 +50,8 @@ BREAKING CHANGE: <description>   (only if applicable)
 | `chore` | maintenance, deps | none |
 
 Scopes: `agent`, `operator`, `infra`, `gitops`, `hack`, `ci`, `docs`, `deps`.
+`release` is reserved for the release PRs opened by release-please
+(`chore(release): release agent 0.2.0`).
 `!` after the type/scope (`feat(agent)!:`) or a `BREAKING CHANGE:` footer → major.
 
 One logical change per commit; each commit should build and pass tests.
