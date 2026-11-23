@@ -45,3 +45,6 @@ Subject / key conventions:
   an SLO of its own.
 - ➖ Security (accounts, NKeys/JWT credentials per node) must be designed — tracked for
   phase 3.
+- ➖ *2026-11-23*: a desired state published during a link cut reaches the agent 10–15 s
+  after the link is restored (KV watch recovery timer) — see
+  [investigation](../investigations/2026-11-link-restore-delay.md), tracked in #16.
