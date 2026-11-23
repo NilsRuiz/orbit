@@ -51,6 +51,7 @@ type Reporter interface {
 	Report(ctx context.Context, s Status) error
 }
 
+// Config tunes the reconciler.
 type Config struct {
 	NodeID string
 	// VerifyTimeout is the dead man's switch deadline after an apply.
@@ -59,6 +60,8 @@ type Config struct {
 	VerifyInterval time.Duration
 }
 
+// Reconciler converges the node to desired versions. Reconcile and Resume must be called
+// from a single goroutine; State is safe for concurrent use.
 type Reconciler struct {
 	cfg      Config
 	st       state.State
@@ -71,6 +74,7 @@ type Reconciler struct {
 	snapshot atomic.Pointer[state.State]
 }
 
+// New returns a Reconciler starting from the persisted state initial.
 func New(cfg Config, initial state.State, store Store, a Applier, h HealthChecker, r Reporter, log *slog.Logger) *Reconciler {
 	if cfg.VerifyInterval <= 0 {
 		cfg.VerifyInterval = time.Second

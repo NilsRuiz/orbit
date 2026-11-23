@@ -13,6 +13,7 @@ import (
 // Phase of the node's deployment state machine.
 type Phase string
 
+// Phases of the state machine: idle → applying → verifying → idle | rolled-back.
 const (
 	PhaseIdle       Phase = "idle"        // running Current, nothing in progress
 	PhaseApplying   Phase = "applying"    // switching to Pending
@@ -37,6 +38,7 @@ type Store struct {
 	path string
 }
 
+// NewStore creates dir if needed and stores state in dir/state.json.
 func NewStore(dir string) (*Store, error) {
 	if err := os.MkdirAll(dir, 0o750); err != nil {
 		return nil, fmt.Errorf("create state dir: %w", err)
@@ -67,7 +69,8 @@ func (s *Store) Save(st State) error {
 		return err
 	}
 	tmp := s.path + ".tmp"
-	if err := os.WriteFile(tmp, b, 0o640); err != nil {
+	// 0600: only the agent (nonroot) reads its own state.
+	if err := os.WriteFile(tmp, b, 0o600); err != nil {
 		return fmt.Errorf("write state: %w", err)
 	}
 	return os.Rename(tmp, s.path)
