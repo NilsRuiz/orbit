@@ -74,6 +74,9 @@ status: ## Show last status messages
 link-cut: ## Cut the link of an edge node: make link-cut NODE=sat-2
 	./hack/scripts/link.sh cut $(NODE)
 
+link-blackhole: ## Silently drop all traffic of an edge link (real radio loss): make link-blackhole NODE=sat-2
+	./hack/scripts/link.sh blackhole $(NODE)
+
 link-restore: ## Restore the link of an edge node
 	./hack/scripts/link.sh restore $(NODE)
 
@@ -94,4 +97,4 @@ tf-destroy: ## Destroy everything — run after each demo session!
 	terraform -chdir=$(TF_DIR) destroy
 
 .PHONY: help verify verify-go verify-tf verify-gitops verify-shell agent-test agent-lint agent-build dev-up dev-down logs desired status \
-        link-cut link-restore link-degrade tf-fmt tf-plan tf-apply tf-destroy
+        link-cut link-blackhole link-restore link-degrade tf-fmt tf-plan tf-apply tf-destroy
