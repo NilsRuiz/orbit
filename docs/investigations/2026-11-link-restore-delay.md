@@ -114,7 +114,9 @@ behaviour had to be measured.
 - **Simulated link**: `docker network disconnect` is not a radio blackout. With a real
   link, or with 100 % packet loss (`tc … loss 100%`), the TCP connection may survive the
   cut or be detected only after the leafnode `ping_interval` (2 min by default). The
-  leaf-detection step could then be much longer, or absent. Not measured.
+  leaf-detection step could then be much longer, or absent. Measured since in
+  [2026-11-silent-link-loss](2026-11-silent-link-loss.md): the connection survives a
+  silent loss of up to ≈ 6 min, and recovery then waits on TCP retransmission backoff.
 - **Degraded link** (`link.sh degrade`: latency, jitter, loss) not measured.
 - **Small sample**: one node, one run per cut duration (plus one run without usable
   timings). No statistical spread; figures are indicative.
