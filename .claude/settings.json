@@ -23,7 +23,11 @@
       "Bash(gh pr view*)",
       "Bash(gh pr checks*)",
       "Bash(gh run view*)",
-      "Bash(gh issue view*)"
+      "Bash(gh issue view*)",
+      "Bash(gh issue list*)",
+      "Bash(gh label list*)",
+      "Bash(gh auth status*)",
+      "Bash(gh api repos/*/milestones*)"
     ],
     "ask": [
       "Bash(git push*)",
@@ -31,7 +35,9 @@
       "Bash(git reset*)",
       "Bash(gh pr create*)",
       "Bash(gh issue create*)",
-      "Bash(docker *)"
+      "Bash(docker *)",
+      "Bash(gh label create*)",
+      "Bash(./hack/scripts/sync-labels.sh*)"
     ],
     "deny": [
       "Bash(terraform apply*)",

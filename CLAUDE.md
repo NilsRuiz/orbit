@@ -45,8 +45,8 @@ merged through a PR with green CI, **squash merge**.
 5. Small, atomic commits in **Conventional Commits** format (`/commit`).
 6. Open the PR with `/pr`; watch CI; fix failures in new commits (no force-push while in review).
 
-Skills in `.claude/skills/`: `/feature` (full cycle), `/verify`, `/commit`, `/self-review`,
-`/pr`, `/adr`.
+Skills in `.claude/skills/`: `/issue` (create an issue), `/feature` (full cycle), `/verify`,
+`/commit`, `/self-review`, `/pr`, `/adr`.
 
 ## Definition of Done
 
