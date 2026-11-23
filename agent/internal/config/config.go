@@ -8,6 +8,7 @@ import (
 	"time"
 )
 
+// Config is the agent configuration, read from ORBIT_* environment variables.
 type Config struct {
 	NodeID            string
 	NATSURL           string
@@ -21,6 +22,7 @@ type Config struct {
 	SimBadVersions    []string
 }
 
+// FromEnv loads Config from the environment, applying defaults; ORBIT_NODE_ID is required.
 func FromEnv() (Config, error) {
 	c := Config{
 		NodeID:        os.Getenv("ORBIT_NODE_ID"),

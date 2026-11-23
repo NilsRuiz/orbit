@@ -37,6 +37,8 @@ jobs:
       - run: go test -race -coverprofile=coverage.out ./...
       - uses: golangci/golangci-lint-action@v8
         with:
+          # Pinned: "latest" lets new linter releases turn CI red with no code change.
+          version: v2.15.0
           working-directory: agent
 
   image:

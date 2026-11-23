@@ -13,11 +13,14 @@ import (
 	"time"
 )
 
+// Sim is a simulated payload: applying takes ApplyDelay, and versions listed in
+// BadVersions are reported unhealthy (to exercise the dead man's switch).
 type Sim struct {
 	ApplyDelay  time.Duration
 	BadVersions []string
 }
 
+// Apply waits ApplyDelay, or returns early if ctx is cancelled.
 func (s Sim) Apply(ctx context.Context, _ string) error {
 	select {
 	case <-ctx.Done():
@@ -27,6 +30,7 @@ func (s Sim) Apply(ctx context.Context, _ string) error {
 	}
 }
 
+// Healthy reports false for versions listed in BadVersions.
 func (s Sim) Healthy(_ context.Context, version string) (bool, error) {
 	return !slices.Contains(s.BadVersions, version), nil
 }
