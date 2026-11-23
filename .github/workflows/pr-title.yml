@@ -37,6 +37,7 @@ jobs:
             ci
             docs
             deps
+            release
           requireScope: false
           subjectPattern: ^[a-z].+[^.]$
           subjectPatternError: "Subject must start lower case and not end with a period."

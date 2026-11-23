@@ -26,6 +26,7 @@ description: Create clean, atomic git commits following Conventional Commits, af
    ```
    - types: feat, fix, perf, refactor, test, docs, build, ci, chore
    - scopes: agent, operator, infra, gitops, hack, ci, docs, deps
+     (`release` is reserved for release-please PRs)
    - breaking change: `feat(agent)!: …` + `BREAKING CHANGE: …` footer
    - good: `fix(agent): resume kv watch after leaf node reconnect`
    - bad: `fixed stuff`, `WIP`, `update files`, `feat: Added new feature.`

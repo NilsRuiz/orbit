@@ -50,6 +50,8 @@ BREAKING CHANGE: <description>   (only if applicable)
 | `chore` | maintenance, deps | none |
 
 Scopes: `agent`, `operator`, `infra`, `gitops`, `hack`, `ci`, `docs`, `deps`.
+`release` is reserved for the release PRs opened by release-please
+(`chore(release): release agent 0.2.0`).
 `!` after the type/scope (`feat(agent)!:`) or a `BREAKING CHANGE:` footer → major.
 
 One logical change per commit; each commit should build and pass tests.
@@ -79,6 +81,20 @@ deleted or weakened to get a green build; flaky tests are fixed or quarantined w
 [release-please](https://github.com/googleapis/release-please) reads Conventional Commits on
 `main`, opens a *release PR* with the version bump and `CHANGELOG.md`; merging it creates the
 tag and GitHub release, which triggers the image build for that version.
+
+release-please acts as a **GitHub App** (`.github/workflows/release-please.yml`), not with
+`GITHUB_TOKEN`. Tags created with `GITHUB_TOKEN` do not trigger other workflows, and the
+repository does not allow `GITHUB_TOKEN` to create pull requests. One-time setup:
+
+1. Create a GitHub App (Settings → Developer settings → GitHub Apps → New): no webhook;
+   repository permissions **Contents: read & write**, **Pull requests: read & write**
+   (Metadata: read is implied); installable only on this account.
+2. Install it on this repository only.
+3. In the repository, add the variable `RELEASE_APP_CLIENT_ID` (the app's Client ID) and the
+   secret `RELEASE_APP_PRIVATE_KEY` (a private key generated for the app, full PEM content).
+
+Tokens are minted per run, expire after one hour and are scoped to the two permissions
+above.
 
 ## 8. Recommended GitHub settings (Settings → Rules → Rulesets on `main`)
 
