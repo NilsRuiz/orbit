@@ -44,6 +44,15 @@ about 20 s.
 | `ORBIT_VERIFY_TIMEOUT` | `30s` | Dead man's switch deadline |
 | `ORBIT_SIM_BAD_VERSIONS` | — | Comma-separated versions the simulator reports unhealthy |
 
+## Logs
+
+JSON on stdout (`log/slog`). NATS connection events worth alerting on:
+
+| `msg` | Level | Meaning |
+|---|---|---|
+| `nats disconnected` / `nats reconnected` | warn / info | Agent ↔ local leaf connection (not the space link) |
+| `nats async error` | warn | Error reported asynchronously by nats.go, with `err`, plus `subject` and `dropped` when it concerns a subscription: slow consumer, permission violation, inactive JetStream consumer |
+
 ## Known gaps (good next tasks)
 
 - [ ] **Status store-and-forward**: today a status published while the hub link is down is
