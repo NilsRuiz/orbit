@@ -88,6 +88,8 @@ make logs              # watch agents apply / report
 make link-cut NODE=sat-2                  # satellite goes out of range
 make desired NODE=sat-2 VERSION=1.1.0     # update queued while offline
 make link-restore NODE=sat-2              # back in range → update applied
+make link-blackhole NODE=sat-2            # silent loss (real radio): packets dropped, no one told
+make link-restore NODE=sat-2
 make desired NODE=sat-3 VERSION=6.6.6     # "bad" version → agent rolls back by itself
 make dev-down
 ```
