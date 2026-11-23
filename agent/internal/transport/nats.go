@@ -47,6 +47,7 @@ func Connect(url, nodeID, credsFile, jsDomain string, log *slog.Logger) (*NATS, 
 		nats.ReconnectHandler(func(c *nats.Conn) {
 			log.Info("nats reconnected", "url", c.ConnectedUrl())
 		}),
+		nats.ErrorHandler(asyncErrorHandler(log)),
 	}
 	if credsFile != "" {
 		opts = append(opts, nats.UserCredentials(credsFile))
@@ -66,6 +67,23 @@ func Connect(url, nodeID, credsFile, jsDomain string, log *slog.Logger) (*NATS, 
 		return nil, fmt.Errorf("jetstream: %w", err)
 	}
 	return &NATS{nodeID: nodeID, nc: nc, js: js, log: log}, nil
+}
+
+// asyncErrorHandler logs errors that nats.go reports only asynchronously: slow consumers,
+// permission violations, inactive JetStream consumers (e.g. a KV watch whose heartbeats
+// stopped). Without it, nats.go prints them as plain text on stderr, outside the
+// structured logs.
+func asyncErrorHandler(log *slog.Logger) nats.ErrHandler {
+	return func(_ *nats.Conn, sub *nats.Subscription, err error) {
+		attrs := []any{"err", err}
+		if sub != nil {
+			attrs = append(attrs, "subject", sub.Subject)
+			if dropped, derr := sub.Dropped(); derr == nil && dropped > 0 {
+				attrs = append(attrs, "dropped", dropped)
+			}
+		}
+		log.Warn("nats async error", attrs...)
+	}
 }
 
 // Close drains the connection (flushes pending messages). Best effort on shutdown: a
