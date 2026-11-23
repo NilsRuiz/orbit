@@ -24,7 +24,7 @@ jobs:
       run:
         working-directory: agent
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-go@v5
         with:
           go-version-file: agent/go.mod
@@ -47,7 +47,7 @@ jobs:
       packages: write   # push to GHCR
       id-token: write   # keyless cosign signing (OIDC)
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - id: tags
         name: Compute image name and tags
         run: |
