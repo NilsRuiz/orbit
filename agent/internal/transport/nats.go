@@ -15,13 +15,16 @@ import (
 	"github.com/orbit-fleet/orbit/agent/internal/reconcile"
 )
 
-const (
-	DesiredBucket = "orbit-desired"
-)
+// DesiredBucket is the hub KV bucket holding one desired state per node (key = node ID).
+const DesiredBucket = "orbit-desired"
 
-func StatusSubject(nodeID string) string    { return fmt.Sprintf("orbit.edge.%s.status", nodeID) }
+// StatusSubject is where a node publishes its status events (stream ORBIT_STATUS).
+func StatusSubject(nodeID string) string { return fmt.Sprintf("orbit.edge.%s.status", nodeID) }
+
+// HeartbeatSubject is where a node publishes its core NATS liveness heartbeats.
 func HeartbeatSubject(nodeID string) string { return fmt.Sprintf("orbit.edge.%s.heartbeat", nodeID) }
 
+// NATS is the agent's transport: desired-state watch, status reports and heartbeats.
 type NATS struct {
 	nodeID string
 	nc     *nats.Conn
@@ -65,7 +68,13 @@ func Connect(url, nodeID, credsFile, jsDomain string, log *slog.Logger) (*NATS, 
 	return &NATS{nodeID: nodeID, nc: nc, js: js, log: log}, nil
 }
 
-func (n *NATS) Close() { n.nc.Drain() } //nolint:errcheck // best effort on shutdown
+// Close drains the connection (flushes pending messages). Best effort on shutdown: a
+// failure is logged, not returned.
+func (n *NATS) Close() {
+	if err := n.nc.Drain(); err != nil {
+		n.log.Warn("nats drain on close", "err", err)
+	}
+}
 
 // WatchDesired streams desired states for this node. The KV bucket is created by the hub;
 // we wait for it if it does not exist yet. The channel is closed when ctx ends.
