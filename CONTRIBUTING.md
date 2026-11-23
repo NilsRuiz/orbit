@@ -14,8 +14,10 @@ mandatory review and CI before merge, automated semantic releases.
 
 ## 2. Issues first
 
-Every change starts from a GitHub issue (even a one-liner): it records *why*. Use labels
-`type/feature`, `type/bug`, `type/chore`, `area/agent|operator|infra|gitops`.
+Every change starts from a GitHub issue (even a one-liner): it records *why*. Labels are
+defined as code in `hack/scripts/sync-labels.sh` (run it once per repository):
+`type/bug|feature|chore`, `area/agent|operator|infra|gitops|hack|ci`, `priority/high|low`.
+With Claude Code, use `/issue`.
 
 ## 3. Branches — trunk-based development
 
