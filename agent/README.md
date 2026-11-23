@@ -22,8 +22,13 @@ own (`github.com/<you>/orbit/agent`) everywhere, then:
 go mod tidy          # generates go.sum — commit it
 go get -u ./... && go mod tidy   # optional: bump to latest nats.go / nats-server (newer
                                  # releases may require a newer Go version)
-go test -race ./...  # unit tests + end-to-end test against an in-process NATS server
+go test -race ./...  # unit tests + integration tests against in-process NATS servers
 ```
+
+`TestConvergenceAfterLeafLinkCut` reproduces the edge topology (agent → leaf → hub) with an
+in-process TCP proxy as the "space link". It bounds convergence to 20 s after a 12 s
+leaf↔hub cut, while the agent's own connection to its leaf stays open (#16). It takes
+about 20 s.
 
 ## Configuration
 
@@ -46,4 +51,6 @@ go test -race ./...  # unit tests + end-to-end test against an in-process NATS s
       with its own domain and *source* a local status stream into the hub's `ORBIT_STATUS`.
 - [ ] **K3s payload driver**: patch the local Flux `OCIRepository` tag, check Deployment readiness.
 - [ ] **Metrics**: Prometheus endpoint (`orbit_agent_phase`, `orbit_agent_rollbacks_total`).
-- [ ] Verify KV watch recovery after long link cuts (chaos test, phase 5).
+- [ ] Verify KV watch recovery after long link cuts (chaos test, phase 5). A clean cut
+      (connections closed) is covered by `TestConvergenceAfterLeafLinkCut`. Still open: a
+      silent cut (packets dropped, sockets left open) and a degraded link.
