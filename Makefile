@@ -68,8 +68,14 @@ desired: ## Set desired version: make desired NODE=sat-1 VERSION=1.1.0
 	@test -n "$(NODE)" -a -n "$(VERSION)" || (echo "usage: make desired NODE=sat-1 VERSION=1.1.0"; exit 1)
 	$(NATS_BOX) nats --server nats://hub:4222 kv put orbit-desired $(NODE) '{"version":"$(VERSION)","rolloutId":"manual"}'
 
-status: ## Show last status messages
-	$(NATS_BOX) nats --server nats://hub:4222 stream view ORBIT_STATUS
+NODES ?= sat-1 sat-2 sat-3
+status: ## Last status each node reported to the hub (ORBIT_STATUS): make status [NODES="sat-1 sat-2"]
+	@# `nats stream view` pages interactively and fails without a TTY: read the last message
+	@# per subject instead, decoded with the jq shipped in nats-box.
+	@$(NATS_BOX) sh -c 'set -o pipefail; for n in $(NODES); do \
+	  nats --server nats://hub:4222 stream get ORBIT_STATUS --last-for orbit.edge.$$n.status --json 2>/dev/null \
+	  | jq -r ".data | @base64d | fromjson | \"\(.nodeId)\t\(.phase)\t\(.current)\t\(.message // \"\")\"" \
+	  || echo "$$n	no status yet"; done'
 
 link-cut: ## Cut the link of an edge node: make link-cut NODE=sat-2
 	./hack/scripts/link.sh cut $(NODE)
