@@ -2,7 +2,7 @@
 
 - **Date**: 2026-11-23
 - **Issue**: #31 (step D)
-- **Status**: Measured. A tuning proposal follows in an ADR (step E).
+- **Status**: Measured; tuning decided in ADR-0006 (follow-up section below).
 - **Related**:
   - [2026-11-link-restore-delay](2026-11-link-restore-delay.md): clean cut, #16
   - [ADR-0002](../adr/0002-nats-jetstream-leaf-nodes.md)
@@ -141,6 +141,47 @@ loss in ≈ 30–40 s. Trade-offs, to be settled in an ADR (#31, step E):
 - **Alternative**: shorten TCP's own give-up time (`TCP_USER_TIMEOUT`, `tcp_retries2`).
   NATS does not expose it, and with the defaults TCP would only give up after ≈ 15 min
   (`tcp_retries2` = 15). Ping tuning is the direct lever.
+
+## Follow-up (2026-11-24): tuned leaf pings
+
+Same fleet and protocol, with `ping_interval: "10s"` and `ping_max: 3` in `leaf.conf`
+(decision: [ADR-0006](../adr/0006-leaf-node-ping-tuning.md)).
+
+### A stall, and its root cause (#35)
+
+A first series, with the agent still on nats.go v1.41.0, gave one **indefinite stall** out
+of 5 runs. Root cause:
+
+- The link came back before the stale detection fired.
+- The agent's ordered consumer reset over the dying leaf connection.
+- The delivered value was lost when that connection was declared stale 4 s later.
+- nats.go v1.41.0 cannot detect a lost *first* message after a reset: its heartbeat gap
+  check needs metadata from a previously received message.
+
+Fixed by nats.go v1.56.0 (#36).
+
+### Silent loss, 30 s, nats.go v1.56.0 (10 runs, 14:49–14:59 UTC)
+
+| Runs | Stalls | Detection (leaf and hub) | Reconnect after restore | Restore → `applying` |
+|---|---|---|---|---|
+| 10 | 0 | ≈ 36 s after blackhole start (6 s after restore) | ≈ 1 s after the stale close | **1.8–14.4 s, median ≈ 9 s** |
+
+Compared with the defaults (25.9 s for the same 30 s loss, and 97.3 s for 2 min), the
+dead connection is now replaced instead of waited on.
+
+### Degraded link, false-positive check (15:16–15:21 UTC)
+
+`link.sh degrade` (800 ms ± 200 ms, 20 % loss) on sat-1 and sat-2 for 300 s, with two
+publishes per node:
+
+- **0** stale disconnects and **0** reconnects on either node or on the hub;
+- versions applied **1.7–1.9 s** after publish;
+- 0 agent warnings.
+
+**Caveat**: `tc netem` only shapes the leaf's **egress**. A ping from the leaf measured an
+RTT of ≈ 795 ms with 30 % loss, but the hub→leaf leg was clean, which is why updates
+arrived within 2 s. Every PING/PONG round trip crossed the degraded leg once, so the check
+is meaningful for false positives. A symmetric degradation is harsher and was not measured.
 
 ## Limitations
 
