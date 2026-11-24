@@ -63,3 +63,9 @@ JSON on stdout (`log/slog`). NATS connection events worth alerting on:
 - [ ] Verify KV watch recovery after long link cuts (chaos test, phase 5). A clean cut
       (connections closed) is covered by `TestConvergenceAfterLeafLinkCut`. Still open: a
       silent cut (packets dropped, sockets left open) and a degraded link.
+- [ ] **Silent mode for the test's `linkProxy`** (`pause()`/`resume()`: stop copying bytes,
+      close nothing). It would give a deterministic regression test for #35: a KV watch
+      stuck when the first message after a consumer reset is lost, fixed by nats.go
+      v1.56.0 in #36. Today that fix is backed only by fleet runs
+      (`docs/investigations/2026-11-silent-link-loss.md`). Deferred from #31 (step C).
+- [ ] **Faster convergence after a clean cut** (#16): 4.7–14.7 s measured, target ≤ 3 s.
