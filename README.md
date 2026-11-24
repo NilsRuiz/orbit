@@ -5,7 +5,7 @@
 > a node that is out of reach**.
 
 ![status](https://img.shields.io/badge/status-WIP-orange)
-<!-- TODO: add CI badges once workflows are green -->
+[![agent](https://github.com/NilsRuiz/orbit/actions/workflows/agent.yml/badge.svg?branch=main)](https://github.com/NilsRuiz/orbit/actions/workflows/agent.yml)
 
 ## Why this project
 
@@ -20,7 +20,9 @@ Orbit explores what a reliable platform for that world looks like:
 - **Intent in Git, orchestration in an operator** — Git declares *what* the fleet should
   run; a Go Kubernetes operator decides *how*: waves, health gates, automatic rollback.
 - **Store-and-forward by design** — NATS JetStream + leaf nodes: desired state waits for
-  the node to come back in range; status flows back when the link returns.
+  the node to come back in range. Status reports are not buffered yet: a status published
+  while the link is down is lost, and heartbeats re-sync the current version on reconnect
+  ([agent known gaps](agent/README.md#known-gaps-good-next-tasks)).
 - **Local safety net** — every node runs a Go agent with an A/B-style *dead man's switch*:
   if a new version is not healthy within its deadline, the node rolls itself back,
   with or without a link to the hub.
@@ -82,14 +84,20 @@ Requirements: Docker, Go ≥ 1.26, `make`. Agent development notes:
 
 ```bash
 make dev-up            # hub NATS + 3 edge leaf nodes + 3 agents (docker compose)
+make logs              # in a second terminal: follow the agents (blocks until Ctrl-C)
+
 make desired NODE=sat-1 VERSION=1.1.0     # simulate the operator: set a target version
-make logs              # watch agents apply / report
-make link-cut NODE=sat-2                  # satellite goes out of range
-make desired NODE=sat-2 VERSION=1.1.0     # update queued while offline
-make link-restore NODE=sat-2              # back in range → update applied
-make link-blackhole NODE=sat-2            # silent loss (real radio): packets dropped, no one told
-make link-restore NODE=sat-2
-make desired NODE=sat-3 VERSION=6.6.6     # "bad" version → agent rolls back by itself
+
+make link-cut NODE=sat-2                  # clean cut: satellite goes out of range
+make desired NODE=sat-2 VERSION=1.1.0     # update queued while offline: nothing happens
+make link-restore NODE=sat-2              # back in range → update applied within seconds
+
+make link-blackhole NODE=sat-2            # silent loss (real radio): packets dropped, sockets open
+make desired NODE=sat-2 VERSION=1.2.0     # queued again: nothing happens
+make link-restore NODE=sat-2              # → applied in about 10 s (see ADR-0006)
+
+make desired NODE=sat-3 VERSION=6.6.6     # "bad" version → "not healthy within 15s", rolls back by itself
+make status            # what the hub received on ORBIT_STATUS
 make dev-down
 ```
 
