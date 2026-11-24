@@ -34,6 +34,11 @@ spec:
           requests: { cpu: 50m, memory: 64Mi }
           limits: { memory: 256Mi }
     config:
+      # Detect a silent link loss in ~30-40 s instead of 4-6 min (ADR-0006). Merged at the
+      # root of nats.conf; server-wide, so it also applies to local clients (the agent).
+      merge:
+        ping_interval: "10s"
+        ping_max: 3
       leafnodes:
         enabled: true
         merge:
