@@ -97,7 +97,7 @@ make dev-down
 ## Roadmap
 
 - [x] Repository skeleton, ADRs, CI scaffolding
-- [ ] **Phase 1** — agent: desired-state watch, persisted A/B state, dead man's switch
+- [x] **Phase 1** — agent: desired-state watch, persisted A/B state, dead man's switch
 - [ ] **Phase 2** — operator: `EdgeNode` registration from heartbeats, `Rollout` waves
 - [ ] **Phase 3** — GCP: Terraform hub + edge VMs, Flux bootstrap, OIDC from CI
 - [ ] **Phase 4** — SRE: SLOs (Sloth), alerting, Grafana dashboards
