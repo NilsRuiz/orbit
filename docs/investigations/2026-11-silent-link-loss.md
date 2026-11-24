@@ -2,7 +2,7 @@
 
 - **Date**: 2026-11-23
 - **Issue**: #31 (step D)
-- **Status**: Measured; tuning proposed in ADR-0006 (follow-up section below).
+- **Status**: Measured; tuning decided in ADR-0006 (follow-up section below).
 - **Related**:
   - [2026-11-link-restore-delay](2026-11-link-restore-delay.md): clean cut, #16
   - [ADR-0002](../adr/0002-nats-jetstream-leaf-nodes.md)

@@ -1,6 +1,6 @@
 # ADR-0006: Tune leaf node pings to detect silent link losses quickly
 
-- **Status**: Proposed
+- **Status**: Accepted
 - **Date**: 2026-11-24
 
 ## Context
