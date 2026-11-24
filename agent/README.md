@@ -13,16 +13,13 @@ internal/transport/   NATS: KV watch, status to JetStream, heartbeats
 internal/payload/     payload drivers (Sim today, k3s/Flux in phase 3)
 ```
 
-## First time
+## Development
 
-The module path `github.com/orbit-fleet/orbit/agent` is a placeholder: replace it with your
-own (`github.com/<you>/orbit/agent`) everywhere, then:
+Module path: `github.com/NilsRuiz/orbit/agent`.
 
 ```bash
-go mod tidy          # generates go.sum — commit it
-go get -u ./... && go mod tidy   # optional: bump to latest nats.go / nats-server (newer
-                                 # releases may require a newer Go version)
 go test -race ./...  # unit tests + integration tests against in-process NATS servers
+go mod tidy          # after changing dependencies; commit go.mod and go.sum
 ```
 
 `TestConvergenceAfterLeafLinkCut` reproduces the edge topology (agent → leaf → hub) with an
