@@ -10,11 +10,11 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/orbit-fleet/orbit/agent/internal/config"
-	"github.com/orbit-fleet/orbit/agent/internal/payload"
-	"github.com/orbit-fleet/orbit/agent/internal/reconcile"
-	"github.com/orbit-fleet/orbit/agent/internal/state"
-	"github.com/orbit-fleet/orbit/agent/internal/transport"
+	"github.com/NilsRuiz/orbit/agent/internal/config"
+	"github.com/NilsRuiz/orbit/agent/internal/payload"
+	"github.com/NilsRuiz/orbit/agent/internal/reconcile"
+	"github.com/NilsRuiz/orbit/agent/internal/state"
+	"github.com/NilsRuiz/orbit/agent/internal/transport"
 )
 
 func main() {

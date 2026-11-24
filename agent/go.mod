@@ -1,4 +1,4 @@
-module github.com/orbit-fleet/orbit/agent
+module github.com/NilsRuiz/orbit/agent
 
 go 1.26.0
 

@@ -77,9 +77,8 @@ Rollout flow:
 
 ## Quick start (local, free)
 
-Requirements: Docker, Go ≥ 1.26, `make`. First time only: replace the placeholder module
-path `github.com/orbit-fleet/orbit` with your own and run `cd agent && go mod tidy`
-(see [agent/README.md](agent/README.md)).
+Requirements: Docker, Go ≥ 1.26, `make`. Agent development notes:
+[agent/README.md](agent/README.md).
 
 ```bash
 make dev-up            # hub NATS + 3 edge leaf nodes + 3 agents (docker compose)
