@@ -112,4 +112,4 @@ pipx install pre-commit && pre-commit install --install-hooks \
   && pre-commit install --hook-type commit-msg
 ```
 
-Tools: Go ≥ 1.24, Docker, Terraform, tflint, golangci-lint, shellcheck, jq, gh.
+Tools: Go ≥ 1.26, Docker, Terraform, tflint, golangci-lint, shellcheck, jq, gh.

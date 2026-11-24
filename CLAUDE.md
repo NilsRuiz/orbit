@@ -60,7 +60,7 @@ A change is done only when:
 ## Code conventions
 
 **Go**
-- Go ≥ 1.24, standard layout (`cmd/`, `internal/`). Keep `internal/reconcile` free of
+- Go ≥ 1.26, standard layout (`cmd/`, `internal/`). Keep `internal/reconcile` free of
   transport dependencies: business logic behind small interfaces, tested with fakes.
 - Errors: wrap with context (`fmt.Errorf("load state: %w", err)`); never `panic` in runtime paths.
 - Every goroutine has an owner and exits on `ctx.Done()`. Shared state is guarded

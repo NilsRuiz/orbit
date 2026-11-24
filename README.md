@@ -77,7 +77,7 @@ Rollout flow:
 
 ## Quick start (local, free)
 
-Requirements: Docker, Go ≥ 1.24, `make`. First time only: replace the placeholder module
+Requirements: Docker, Go ≥ 1.26, `make`. First time only: replace the placeholder module
 path `github.com/orbit-fleet/orbit` with your own and run `cd agent && go mod tidy`
 (see [agent/README.md](agent/README.md)).
 
