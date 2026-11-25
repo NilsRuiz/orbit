@@ -1,6 +1,6 @@
 # ADR-0008: Build the fleet rollout orchestration instead of adopting an edge platform
 
-- **Status**: Proposed
+- **Status**: Accepted
 - **Date**: 2026-11-25
 
 ## Context
