@@ -3,6 +3,9 @@
 Kubernetes operator running on the hub. It turns a `Rollout` (intent, from Git via Flux)
 into waves of desired-state updates in NATS, and promotes or halts based on agent status.
 
+Why a custom operator rather than KubeEdge, OpenYurt, Rancher Fleet or Open Cluster
+Management: [ADR-0008](../docs/adr/0008-build-fleet-orchestration.md).
+
 ## Development
 
 Scaffolded with kubebuilder v4.16.0 (domain `orbit.io`, group `fleet`, version `v1alpha1`).
