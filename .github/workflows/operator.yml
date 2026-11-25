@@ -1,0 +1,43 @@
+name: operator
+
+on:
+  pull_request:
+    paths: ["operator/**", ".github/workflows/operator.yml"]
+  push:
+    branches: [main]
+    paths: ["operator/**", ".github/workflows/operator.yml"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: operator-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: operator
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: operator/go.mod
+          cache-dependency-path: operator/go.sum
+      - run: go mod verify
+      # Regenerates CRDs/deepcopy, runs vet, then the tests against envtest (a real
+      # kube-apiserver + etcd, downloaded by setup-envtest at the pinned versions).
+      - run: make test
+      - name: Generated files are up to date
+        run: |
+          git diff --exit-code -- . || {
+            echo "::error::make manifests generate changed files: run it and commit the result"
+            exit 1
+          }
+      - uses: golangci/golangci-lint-action@v9
+        with:
+          # Pinned: keep in sync with GOLANGCI_LINT_VERSION in operator/Makefile.
+          version: v2.15.0
+          working-directory: operator
