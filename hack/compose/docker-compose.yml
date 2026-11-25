@@ -48,6 +48,7 @@ services:
     environment:
       <<: *agent-env
       ORBIT_NODE_ID: sat-1
+      ORBIT_NODE_LABELS: orbit.io/constellation=alpha
       ORBIT_NATS_URL: nats://leaf-sat-1:4222
     volumes: [sat-1-state:/var/lib/orbit]
     networks: [sat-1-local]
@@ -64,6 +65,7 @@ services:
     environment:
       <<: *agent-env
       ORBIT_NODE_ID: sat-2
+      ORBIT_NODE_LABELS: orbit.io/constellation=alpha
       ORBIT_NATS_URL: nats://leaf-sat-2:4222
     volumes: [sat-2-state:/var/lib/orbit]
     networks: [sat-2-local]
@@ -80,6 +82,7 @@ services:
     environment:
       <<: *agent-env
       ORBIT_NODE_ID: sat-3
+      ORBIT_NODE_LABELS: orbit.io/constellation=beta
       ORBIT_NATS_URL: nats://leaf-sat-3:4222
     volumes: [sat-3-state:/var/lib/orbit]
     networks: [sat-3-local]

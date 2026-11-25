@@ -31,7 +31,7 @@ about 20 s.
 
 | Variable | Default | Description |
 |---|---|---|
-| `ORBIT_NODE_ID` | — (required) | Node identity, e.g. `sat-1` |
+| `ORBIT_NODE_ID` | — (required) | Node identity, e.g. `sat-1`. Must be a DNS-1123 label: it names the `EdgeNode` and is a NATS subject token |
 | `ORBIT_NATS_URL` | `nats://127.0.0.1:4222` | Local leaf node |
 | `ORBIT_NATS_CREDS` | — | NATS credentials file (phase 3) |
 | `ORBIT_JS_DOMAIN` | `hub` | Hub JetStream domain, reached through the leaf node |
@@ -40,6 +40,35 @@ about 20 s.
 | `ORBIT_HEARTBEAT_INTERVAL` | `10s` | |
 | `ORBIT_VERIFY_TIMEOUT` | `30s` | Dead man's switch deadline |
 | `ORBIT_SIM_BAD_VERSIONS` | — | Comma-separated versions the simulator reports unhealthy |
+| `ORBIT_NODE_LABELS` | — | `orbit.io/<name>=<value>` pairs, comma-separated (e.g. `orbit.io/constellation=alpha`). Sent in heartbeats; the operator mirrors them on the `EdgeNode` and `Fleet`s select on them (ADR-0007). Other prefixes are refused at start-up |
+
+## Messages
+
+The agent publishes on the hub through its leaf node (ADR-0002). These payloads are a
+contract with the operator, which decodes them in another module; tests pin the field
+names (`internal/transport/heartbeat_integration_test.go`).
+
+**Heartbeat**: `orbit.edge.<node>.heartbeat`, core NATS, every `ORBIT_HEARTBEAT_INTERVAL`.
+
+```json
+{
+  "nodeId": "sat-1",
+  "current": "1.2.0",
+  "phase": "idle",
+  "rolloutId": "r-42",
+  "labels": {"orbit.io/constellation": "alpha"},
+  "time": "2026-11-25T10:00:00Z"
+}
+```
+
+- `phase`: `idle`, `applying`, `verifying` or `rolled-back`.
+- `rolloutId`: omitted when empty.
+- `labels`: always an object, `{}` when none are configured.
+- `time`: agent clock, informative only. The operator uses its own reception time for
+  `lastSeen`, because a node's clock may drift.
+
+**Status**: `orbit.edge.<node>.status`, stream `ORBIT_STATUS`, one event per state
+transition (`reconcile.Status`).
 
 ## Logs
 
