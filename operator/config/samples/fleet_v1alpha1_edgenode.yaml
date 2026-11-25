@@ -1,0 +1,9 @@
+# Created by the operator from a node's first heartbeat (ADR-0007); shown for reference.
+apiVersion: fleet.orbit.io/v1alpha1
+kind: EdgeNode
+metadata:
+  name: sat-1
+  labels:
+    orbit.io/constellation: alpha
+spec:
+  contactInterval: 95m # one LEO orbit

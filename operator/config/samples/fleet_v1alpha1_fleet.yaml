@@ -1,0 +1,8 @@
+apiVersion: fleet.orbit.io/v1alpha1
+kind: Fleet
+metadata:
+  name: constellation-alpha
+spec:
+  selector:
+    matchLabels:
+      orbit.io/constellation: alpha
