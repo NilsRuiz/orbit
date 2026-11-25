@@ -3,20 +3,22 @@
 Kubernetes operator running on the hub. It turns a `Rollout` (intent, from Git via Flux)
 into waves of desired-state updates in NATS, and promotes or halts based on agent status.
 
-## Scaffold (run locally — generated code is not committed by hand)
+## Development
 
-Requires Go, Docker and [kubebuilder](https://book.kubebuilder.io/quick-start).
+Scaffolded with kubebuilder v4.16.0 (domain `orbit.io`, group `fleet`, version `v1alpha1`).
+The API lives in [`api/v1alpha1/`](api/v1alpha1/); examples in
+[`config/samples/`](config/samples/).
 
 ```bash
-cd operator
-kubebuilder init --domain orbit.io --repo github.com/<you>/orbit/operator
-kubebuilder create api --group fleet --version v1alpha1 --kind EdgeNode --resource --controller
-kubebuilder create api --group fleet --version v1alpha1 --kind Fleet    --resource --controller=false
-kubebuilder create api --group fleet --version v1alpha1 --kind Rollout  --resource --controller
+make manifests generate  # regenerate CRDs (config/crd/bases) and deepcopy after editing *_types.go
+make test                # vet + tests with -race against envtest (real kube-apiserver + etcd)
+make lint                # golangci-lint, same pinned version as CI
 ```
 
-Then copy the spec/status fields from [`design/api_v1alpha1.go`](design/api_v1alpha1.go)
-into the generated `api/v1alpha1/*_types.go`, and run `make manifests generate`.
+Generated files (`zz_generated.deepcopy.go`, `config/crd/bases/`, `config/rbac/role.yaml`)
+are committed but never edited by hand; CI fails if they are out of date. Tools
+(controller-gen, setup-envtest, kustomize, golangci-lint) are downloaded into `bin/` at the
+versions pinned in the `Makefile`.
 
 ## Resources
 

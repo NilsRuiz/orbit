@@ -1,14 +1,5 @@
 # What a release looks like in Git: one PR changing targetVersion.
 apiVersion: fleet.orbit.io/v1alpha1
-kind: Fleet
-metadata:
-  name: constellation-alpha
-spec:
-  selector:
-    matchLabels:
-      orbit.io/constellation: alpha
----
-apiVersion: fleet.orbit.io/v1alpha1
 kind: Rollout
 metadata:
   name: payload

@@ -13,12 +13,16 @@ help: ## Show this help
 ##@ Quality gates (same checks as CI)
 verify: verify-go verify-tf verify-gitops verify-shell ## Run every quality gate
 
-verify-go: ## gofmt, go vet, golangci-lint, go test -race (agent; operator once scaffolded)
+verify-go: ## gofmt, go vet, golangci-lint, go test -race (agent, operator)
 	@for m in agent operator; do \
 	  [ -f $$m/go.mod ] || continue; \
 	  echo "==> $$m"; \
 	  ( cd $$m && test -z "$$(gofmt -l .)" || { gofmt -l .; echo "gofmt needed"; exit 1; } ) || exit 1; \
-	  ( cd $$m && go vet ./... && go test -race -count=1 ./... ) || exit 1; \
+	  if [ -f $$m/Makefile ]; then \
+	    $(MAKE) -s -C $$m test || exit 1; \
+	  else \
+	    ( cd $$m && go vet ./... && go test -race -count=1 ./... ) || exit 1; \
+	  fi; \
 	  if command -v golangci-lint >/dev/null; then (cd $$m && golangci-lint run) || exit 1; \
 	  else echo "⚠️  golangci-lint not installed: lint NOT verified"; fi; \
 	done
