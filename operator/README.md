@@ -31,7 +31,8 @@ into the generated `api/v1alpha1/*_types.go`, and run `make manifests generate`.
 **EdgeNode controller** — subscribes to `orbit.edge.*.heartbeat` and the `ORBIT_STATUS`
 stream; creates/updates `EdgeNode` objects; marks a node `Unreachable` after
 `2 × expected contact interval` without heartbeat (*unreachable ≠ failed*: a satellite out
-of range is normal).
+of range is normal). Nodes register themselves: an unknown heartbeat creates the
+`EdgeNode`, with the agent's `orbit.io/*` labels ([ADR-0007](../docs/adr/0007-edgenode-registration-from-heartbeats.md)).
 
 **Rollout controller** — reconcile loop:
 
