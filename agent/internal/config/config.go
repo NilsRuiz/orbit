@@ -20,6 +20,8 @@ type Config struct {
 	VerifyTimeout     time.Duration
 	LogLevel          string
 	SimBadVersions    []string
+	// NodeLabels are sent in heartbeats; the operator mirrors them on the EdgeNode.
+	NodeLabels map[string]string
 }
 
 // FromEnv loads Config from the environment, applying defaults; ORBIT_NODE_ID is required.
@@ -38,7 +40,13 @@ func FromEnv() (Config, error) {
 	if c.NodeID == "" {
 		return c, fmt.Errorf("ORBIT_NODE_ID is required")
 	}
+	if err := ValidateNodeID(c.NodeID); err != nil {
+		return c, fmt.Errorf("ORBIT_NODE_ID: %w", err)
+	}
 	var err error
+	if c.NodeLabels, err = ParseNodeLabels(os.Getenv("ORBIT_NODE_LABELS")); err != nil {
+		return c, fmt.Errorf("ORBIT_NODE_LABELS: %w", err)
+	}
 	if c.HeartbeatInterval, err = time.ParseDuration(getenv("ORBIT_HEARTBEAT_INTERVAL", "10s")); err != nil {
 		return c, fmt.Errorf("ORBIT_HEARTBEAT_INTERVAL: %w", err)
 	}
