@@ -25,7 +25,8 @@ description: Create clean, atomic git commits following Conventional Commits, af
    Refs: #<issue>
    ```
    - types: feat, fix, perf, refactor, test, docs, build, ci, chore
-   - scopes: agent, operator, infra, gitops, hack, ci, docs, deps
+   - scopes: agent, operator, infra, gitops, hack, ci, docs, adr, deps
+     (`adr` for Architecture Decision Records, as in the `/adr` skill)
      (`release` is reserved for release-please PRs)
    - breaking change: `feat(agent)!: …` + `BREAKING CHANGE: …` footer
    - good: `fix(agent): resume kv watch after leaf node reconnect`

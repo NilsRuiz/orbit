@@ -36,6 +36,7 @@ jobs:
             hack
             ci
             docs
+            adr
             deps
             release
           requireScope: false
