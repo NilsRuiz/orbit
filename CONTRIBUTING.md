@@ -49,7 +49,8 @@ BREAKING CHANGE: <description>   (only if applicable)
 | `build` / `ci` | build system / pipelines | none |
 | `chore` | maintenance, deps | none |
 
-Scopes: `agent`, `operator`, `infra`, `gitops`, `hack`, `ci`, `docs`, `deps`.
+Scopes: `agent`, `operator`, `infra`, `gitops`, `hack`, `ci`, `docs`, `adr`, `deps`.
+`adr` is for Architecture Decision Records (`docs(adr): add ADR-0008 …`).
 `release` is reserved for the release PRs opened by release-please
 (`chore(release): release agent 0.2.0`).
 `!` after the type/scope (`feat(agent)!:`) or a `BREAKING CHANGE:` footer → major.
