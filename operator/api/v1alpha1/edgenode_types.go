@@ -36,6 +36,12 @@ type EdgeNodeStatus struct {
 	// +optional
 	LastSeen *metav1.Time `json:"lastSeen,omitempty"`
 
+	// reachableSince is when the current (or last) contact period started: the first
+	// contact, or the return from Unreachable. A rollout's health gate timeout for this
+	// node counts from it, so a node back in range gets time to apply.
+	// +optional
+	ReachableSince *metav1.Time `json:"reachableSince,omitempty"`
+
 	// currentVersion is the version the agent runs (its last known-good version).
 	// +optional
 	CurrentVersion string `json:"currentVersion,omitempty"`

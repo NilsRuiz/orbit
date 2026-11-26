@@ -79,20 +79,49 @@ NAME                  NODES   REACHABLE   UNREACHABLE   READY
 constellation-alpha   2       2           0             True
 ```
 
-**Rollout controller** — reconcile loop:
+**Rollout controller** ([ADR-0004](../docs/adr/0004-progressive-rollout-and-local-rollback.md)):
 
 ```
-Pending ─► Progressing(wave i) ─► health gate ─┬─ pass ─► wave i+1 … ─► Succeeded
-                                               └─ fail ─► Halted (revert wave i)
+Pending ─► Progressing(wave i) ─► gate ─┬─ Promote ─► soak (pauseFor) ─► wave i+1 … ─► Succeeded
+                                        └─ Halt ─► revert wave i ─► Halted
 ```
 
-1. Resolve the fleet → sorted list of `EdgeNode`s (deterministic wave membership).
-2. For wave *i*: write `{"version": target, "rolloutId": …}` to `orbit-desired/<node>`.
-3. Wait until every node of the wave is `idle` on target, or the gate timeout expires.
-   Unreachable nodes do not count as failures; they are tracked as `pending`.
-4. Gate: `failed / (succeeded + failed) <= maxFailurePercent` → promote; else halt and
-   write the previous version back for the wave.
-5. Use `RequeueAfter` (not busy loops); make every step idempotent (KV revision checks).
+Each reconcile recomputes the plan and the gate from the cluster and the bucket, so it can
+resume anywhere. The status keeps where the run is: `currentWave`, `waveStartTime`,
+`soakUntil`.
+
+- **A run** has the id `<name>-g<generation>`, taken when it starts. Only a new
+  `targetVersion` or `fleetRef` starts a new run, from the first wave. Editing `paused`,
+  the waves or the gate applies to the run in progress. `Succeeded` and `Halted` are
+  final until then.
+- **Writes**: `{"version", "rolloutId", "previousVersion"}` is written to
+  `orbit-desired/<node>` for every node of the started waves, including unreachable ones,
+  which apply it once back in range.
+- **Gate timeout, per node**: it counts from the wave start or from the node's return in
+  range (`EdgeNode.status.reachableSince`), whichever is later. A satellite back after
+  hours gets the full timeout to apply; a reachable node that does not converge in time
+  is `Stuck` and counts as failed.
+- **Halt** reverts the current wave only: earlier waves passed their gate. A run never
+  re-writes a node it reverted.
+- **The last wave** does not complete while some nodes are pending (out of range). The
+  rollout stays `Progressing` with reason `WaitingForPendingNodes`: neither failed nor
+  done.
+- **`spec.paused`**: no promotion and no new writes, but the gate can still halt. Safety
+  comes before a manual hold.
+- **Wake-ups**:
+  - relevant changes of the fleet's `EdgeNode`s (status fields `Classify` reads, labels);
+  - the fleet itself;
+  - `RequeueAfter` for the nearest node deadline or the end of a soak. No polling.
+- **The `Rollout` is read uncached**: the cache may not hold the controller's own last
+  status write yet. Acting on it once re-wrote a bad version over a revert.
+- **Events**: `WaveStarted`, `WavePromoted`, `Paused`, `Halted` (Warning, with the counts
+  and the number of nodes reverted), `Succeeded`.
+
+```
+$ kubectl get rollouts
+NAME      TARGET   PHASE       WAVE   UPDATED   FAILED   PENDING
+payload   1.2.0    Succeeded   2      10        0        0
+```
 
 Desired states are written through `internal/desired`:
 - the writes are compare-and-swap on the KV revision, so a concurrent `make desired` is
@@ -101,7 +130,7 @@ Desired states are written through `internal/desired`:
   A revert writes `<rolloutId>-revert`, and never touches a value another writer has
   changed since. See the format in [`agent/README.md`](../agent/README.md#messages).
 
-The rules are pure functions in `internal/rollout` (planned controller in #46):
+The rules are pure functions in `internal/rollout`:
 
 - **Waves** (`PlanWaves`): wave *i* ends with `ceil(percent × N / 100)` nodes, so a 10 %
   wave reaches at least one node. Nodes are ordered by a hash of the rollout name and the
@@ -112,7 +141,7 @@ The rules are pure functions in `internal/rollout` (planned controller in #46):
 - **Gate** (`EvaluateGate`), over all waves started so far:
   - halts early once failures exceed the threshold even if every node in progress
     succeeds;
-  - at the timeout, reachable nodes still in progress count as failed;
+  - `Stuck` nodes (past their `Deadline`) count as failed;
   - if every node is pending, it waits, even past the timeout: no blind promotion, and
     out of range is not a failure.
 

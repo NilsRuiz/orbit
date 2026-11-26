@@ -26,6 +26,7 @@ rules:
   resources:
   - edgenodes/status
   - fleets/status
+  - rollouts/status
   verbs:
   - get
   - patch
@@ -33,6 +34,7 @@ rules:
   - fleet.orbit.io
   resources:
   - fleets
+  - rollouts
   verbs:
   - get
   - list

@@ -26,6 +26,15 @@ spec:
     - jsonPath: .status.currentWave
       name: Wave
       type: integer
+    - jsonPath: .status.updated
+      name: Updated
+      type: integer
+    - jsonPath: .status.failed
+      name: Failed
+      type: integer
+    - jsonPath: .status.pending
+      name: Pending
+      type: integer
     name: v1alpha1
     schema:
       openAPIV3Schema:
@@ -119,9 +128,12 @@ spec:
             - waves
             type: object
           status:
-            description: RolloutStatus is the operator's progress report.
+            description: RolloutStatus is the operator's progress report, and the
+              state it resumes from.
             properties:
               conditions:
+                description: 'conditions: Ready is True once Succeeded; its reason
+                  tells why not otherwise.'
                 items:
                   description: Condition contains details for one aspect of the current
                     state of this API Resource.
@@ -185,7 +197,20 @@ spec:
                 format: int32
                 type: integer
               failed:
+                description: failed counts nodes of started waves that rolled back
+                  from the target version.
                 format: int32
+                type: integer
+              fleetRef:
+                type: string
+              nodes:
+                description: nodes is the fleet size when the status was computed.
+                format: int32
+                type: integer
+              observedGeneration:
+                description: observedGeneration is the spec generation this status
+                  is about.
+                format: int64
                 type: integer
               pending:
                 description: pending counts nodes of started waves that are unreachable
@@ -201,9 +226,33 @@ spec:
                 - Halted
                 - Succeeded
                 type: string
+              rolloutId:
+                description: |-
+                  rolloutId identifies this run in desired states and agent reports:
+                  <name>-g<generation>, taken when the run started. A run restarts from the first
+                  wave only when targetVersion or fleetRef change; editing paused, waves or the
+                  health gate applies to the run in progress.
+                type: string
+              soakUntil:
+                description: |-
+                  soakUntil is set once the current wave's gate passed: the next wave starts after
+                  it (spec.waves[].pauseFor).
+                format: date-time
+                type: string
+              targetVersion:
+                description: targetVersion and fleetRef of the run in progress.
+                type: string
               updated:
+                description: updated counts nodes of started waves that run the target
+                  version.
                 format: int32
                 type: integer
+              waveStartTime:
+                description: |-
+                  waveStartTime is when the current wave started: the health gate timeout counts
+                  from it.
+                format: date-time
+                type: string
             type: object
         required:
         - spec

@@ -270,6 +270,9 @@ func (in *Ingester) writeStatus(ctx context.Context, en *fleetv1alpha1.EdgeNode,
 		next.LastSeen = &metav1.Time{Time: seen}
 	}
 	next.Reachability, _ = edgenode.Reachability(lastSeenOf(next), ci, in.Now())
+	if next.Reachability == fleetv1alpha1.Reachable && prev.Reachability != fleetv1alpha1.Reachable {
+		next.ReachableSince = &metav1.Time{Time: seen} // a new contact period starts
+	}
 
 	changed := !equality.Semantic.DeepEqual(withLastSeen(prev, nil), withLastSeen(*next, nil))
 	if !changed && !edgenode.ShouldWriteLastSeen(prevSeen, seen, ci) {
