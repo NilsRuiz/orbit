@@ -29,7 +29,11 @@ import (
 	"github.com/NilsRuiz/orbit/operator/internal/rollout"
 )
 
-const badVersion = "6.6.6"
+const (
+	badVersion = "6.6.6"
+	// hangVersion never converges: the agent reports applying, and keeps talking.
+	hangVersion = "7.7.7"
+)
 
 // startKV runs an in-process NATS hub with the orbit-desired bucket.
 func startKV(t *testing.T) jetstream.KeyValue {
@@ -113,10 +117,14 @@ func (s *simAgents) apply(node string, v desired.Value) {
 			return err
 		}
 		en.Status.Reachability = fleetv1alpha1.Reachable
+		en.Status.LastSeen = &metav1.Time{Time: time.Now()} // as the ingester writes it
 		en.Status.RolloutID = v.RolloutID
-		if v.Version == badVersion {
+		switch v.Version {
+		case badVersion:
 			en.Status.Phase = "rolled-back" // dead man's switch: current is unchanged
-		} else {
+		case hangVersion:
+			en.Status.Phase = "applying"
+		default:
 			en.Status.Phase, en.Status.CurrentVersion = "idle", v.Version
 		}
 		return k8s.Status().Update(context.Background(), en)
@@ -219,7 +227,8 @@ func fleetWithNodes(t *testing.T, n int, unreachable ...string) (fleet string, n
 		if slices.Contains(unreachable, name) {
 			reach = fleetv1alpha1.Unreachable
 		}
-		en.Status = fleetv1alpha1.EdgeNodeStatus{Reachability: reach, Phase: "idle", CurrentVersion: "1.0.0"}
+		en.Status = fleetv1alpha1.EdgeNodeStatus{Reachability: reach, Phase: "idle", CurrentVersion: "1.0.0",
+			LastSeen: &metav1.Time{Time: time.Now()}}
 		if err := k8s.Status().Update(context.Background(), en); err != nil {
 			t.Fatal(err)
 		}
@@ -471,4 +480,48 @@ func TestRolloutWaitsForItsFleet(t *testing.T) {
 	// Creating the fleet wakes the rollout (Fleet watch), no polling.
 	createFleet(t, "fleet-created-later", metav1.LabelSelector{MatchLabels: map[string]string{testLabel(t): "x"}})
 	waitRollout(t, "early", "Succeeded on an empty fleet", phaseIs(fleetv1alpha1.RolloutSucceeded))
+}
+
+func TestRolloutStuckNodeHalts(t *testing.T) {
+	kv := startKV(t)
+	startRolloutManager(t, kv)
+	startSimAgents(t, kv)
+	fleet, _ := fleetWithNodes(t, 2)
+	createRollout(t, "stuck", fleet, hangVersion, []int32{50, 100}, false)
+
+	// The canary keeps reporting "applying" past the gate timeout (2 s): stuck, failed.
+	s := waitRollout(t, "stuck", "Halted", phaseIs(fleetv1alpha1.RolloutHalted))
+	c := meta.FindStatusCondition(s.Conditions, fleetv1alpha1.RolloutReady)
+	if s.CurrentWave != 0 || c == nil || !strings.Contains(c.Message, "1 stuck") {
+		t.Errorf("status = %+v", s)
+	}
+}
+
+// TestRolloutSilentNodeIsNotStuck: a node that left range just before the wave (still
+// Reachable: Unreachable takes 2 × contactInterval) must not halt the rollout at the
+// gate timeout. Seen on the k3d demo.
+func TestRolloutSilentNodeIsNotStuck(t *testing.T) {
+	kv := startKV(t)
+	startRolloutManager(t, kv)
+	key := strings.TrimPrefix(testLabel(t), "orbit.io/")
+	names := []string{key + "-1", key + "-2"}
+	silent := rollout.PlanWaves(names, []int32{50, 100}, "silent")[0][0]
+	sim := startSimAgents(t, kv, silent) // ignores the bucket, but is still Reachable
+	fleet, _ := fleetWithNodes(t, 2)
+	en := &fleetv1alpha1.EdgeNode{}
+	if err := k8s.Get(context.Background(), client.ObjectKey{Name: silent}, en); err != nil {
+		t.Fatal(err)
+	}
+	en.Status.LastSeen = &metav1.Time{Time: time.Now().Add(-30 * time.Second)}
+	if err := k8s.Status().Update(context.Background(), en); err != nil {
+		t.Fatal(err)
+	}
+	createRollout(t, "silent", fleet, "1.1.0", []int32{50, 100}, false)
+
+	time.Sleep(4 * time.Second) // 2 × the gate timeout
+	if s := rolloutStatus(t, "silent"); s.Phase != fleetv1alpha1.RolloutProgressing || s.Pending != 1 {
+		t.Errorf("silent canary: status = %+v, want Progressing with 1 pending", s)
+	}
+	sim.online(silent)
+	waitRollout(t, "silent", "Succeeded", phaseIs(fleetv1alpha1.RolloutSucceeded))
 }

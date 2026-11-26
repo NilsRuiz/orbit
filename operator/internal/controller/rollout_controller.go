@@ -269,7 +269,7 @@ func (x *rolloutRun) evaluate(started []string, nodes map[string]*fleetv1alpha1.
 			deadline := rollout.Deadline(x.st.WaveStartTime.Time, since, x.ro.Spec.HealthGate.Timeout.Duration)
 			switch {
 			case !x.now.Before(deadline):
-				res = rollout.Stuck
+				res = rollout.AtDeadline(st, x.st.RolloutID)
 			case next.IsZero() || deadline.Before(next):
 				next = deadline
 			}
