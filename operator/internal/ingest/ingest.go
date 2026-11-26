@@ -273,6 +273,13 @@ func (in *Ingester) writeStatus(ctx context.Context, en *fleetv1alpha1.EdgeNode,
 	if next.Reachability == fleetv1alpha1.Reachable && prev.Reachability != fleetv1alpha1.Reachable {
 		next.ReachableSince = &metav1.Time{Time: seen} // a new contact period starts
 	}
+	if next.RolloutID != prev.RolloutID {
+		// The node adopted another run: it starts applying that run's version now.
+		next.RolloutIDSince = nil
+		if next.RolloutID != "" {
+			next.RolloutIDSince = &metav1.Time{Time: seen}
+		}
+	}
 
 	changed := !equality.Semantic.DeepEqual(withLastSeen(prev, nil), withLastSeen(*next, nil))
 	if !changed && !edgenode.ShouldWriteLastSeen(prevSeen, seen, ci) {

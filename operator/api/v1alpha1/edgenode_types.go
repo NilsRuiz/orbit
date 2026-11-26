@@ -55,6 +55,12 @@ type EdgeNodeStatus struct {
 	// +optional
 	RolloutID string `json:"rolloutId,omitempty"`
 
+	// rolloutIdSince is when the hub saw the node adopt its current rolloutId, that is
+	// start applying that run's version. A rollout's health gate timeout for this node
+	// counts from it at the latest.
+	// +optional
+	RolloutIDSince *metav1.Time `json:"rolloutIdSince,omitempty"`
+
 	// observedStatusSeq is the ORBIT_STATUS stream sequence of the last status event
 	// applied. Older or replayed events are ignored (ADR-0007).
 	// +optional

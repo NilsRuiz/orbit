@@ -81,10 +81,18 @@ const (
 )
 
 // Deadline is when an InProgress node becomes Stuck: the gate timeout counted from the
-// wave start, or from the node's return in range if later (EdgeNode
-// status.reachableSince). A satellite back after hours gets the full timeout to apply.
-func Deadline(waveStart, reachableSince time.Time, timeout time.Duration) time.Time {
-	return later(waveStart, reachableSince).Add(timeout)
+// latest of starts — the wave start, the node's return in range (EdgeNode
+// status.reachableSince), the moment it acknowledged the run (status.rolloutIdSince).
+// A node that only starts applying late, after hours out of range or a short link cut,
+// gets the full timeout from then.
+func Deadline(timeout time.Duration, starts ...time.Time) time.Time {
+	var latest time.Time
+	for _, t := range starts {
+		if t.After(latest) {
+			latest = t
+		}
+	}
+	return latest.Add(timeout)
 }
 
 // AtDeadline tells what an InProgress node past its Deadline is. Stuck if it
@@ -98,13 +106,6 @@ func AtDeadline(s fleetv1alpha1.EdgeNodeStatus, rolloutID string) Result {
 		return Stuck
 	}
 	return Pending
-}
-
-func later(a, b time.Time) time.Time {
-	if b.After(a) {
-		return b
-	}
-	return a
 }
 
 // Classify tells where a node stands in the rollout rolloutID to version target. A known

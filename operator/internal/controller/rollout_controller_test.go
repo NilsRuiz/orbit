@@ -118,6 +118,9 @@ func (s *simAgents) apply(node string, v desired.Value) {
 		}
 		en.Status.Reachability = fleetv1alpha1.Reachable
 		en.Status.LastSeen = &metav1.Time{Time: time.Now()} // as the ingester writes it
+		if en.Status.RolloutID != v.RolloutID {
+			en.Status.RolloutIDSince = &metav1.Time{Time: time.Now()}
+		}
 		en.Status.RolloutID = v.RolloutID
 		switch v.Version {
 		case badVersion:
@@ -150,6 +153,19 @@ func (s *simAgents) online(node string) {
 	if err := k8s.Status().Update(context.Background(), en); err != nil {
 		s.t.Fatal(err)
 	}
+	if ok {
+		s.apply(node, v)
+	}
+}
+
+// resume ends a short link cut: the node never became Unreachable (that takes
+// 2 × contactInterval), so its contact period does not restart; it just applies the
+// latest desired state.
+func (s *simAgents) resume(node string) {
+	s.mu.Lock()
+	s.offline[node] = false
+	v, ok := s.latest[node]
+	s.mu.Unlock()
 	if ok {
 		s.apply(node, v)
 	}
@@ -524,4 +540,30 @@ func TestRolloutSilentNodeIsNotStuck(t *testing.T) {
 	}
 	sim.online(silent)
 	waitRollout(t, "silent", "Succeeded", phaseIs(fleetv1alpha1.RolloutSucceeded))
+}
+
+// TestRolloutShortCutAfterTheTimeout: a node cut for less than 2 × contactInterval stays
+// Reachable. Back after the gate timeout, it starts applying: it must get the full
+// timeout from then, not be stuck at once and reverted mid-apply. Seen on the k3d demo.
+func TestRolloutShortCutAfterTheTimeout(t *testing.T) {
+	kv := startKV(t)
+	startRolloutManager(t, kv)
+	key := strings.TrimPrefix(testLabel(t), "orbit.io/")
+	names := []string{key + "-1", key + "-2"}
+	canary := rollout.PlanWaves(names, []int32{50, 100}, "shortcut")[0][0]
+	sim := startSimAgents(t, kv, canary)
+	fleet, _ := fleetWithNodes(t, 2)
+	createRollout(t, "shortcut", fleet, hangVersion, []int32{50, 100}, false)
+
+	time.Sleep(3 * time.Second) // past the gate timeout (2 s), the canary silent
+	if s := rolloutStatus(t, "shortcut"); s.Phase != fleetv1alpha1.RolloutProgressing {
+		t.Fatalf("before the canary is back: status = %+v", s)
+	}
+	sim.resume(canary) // starts applying, and hangs
+	time.Sleep(time.Second)
+	if s := rolloutStatus(t, "shortcut"); s.Phase != fleetv1alpha1.RolloutProgressing {
+		t.Errorf("canary applying for 1 s of its 2 s timeout: status = %+v, want Progressing", s)
+	}
+	// It does hang: stuck once its own timeout has passed.
+	waitRollout(t, "shortcut", "Halted", phaseIs(fleetv1alpha1.RolloutHalted))
 }

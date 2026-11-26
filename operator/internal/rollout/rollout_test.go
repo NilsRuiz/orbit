@@ -234,7 +234,7 @@ func TestDeadline(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := Deadline(start, tt.reachableSince, timeout); !got.Equal(tt.want) {
+			if got := Deadline(timeout, start, tt.reachableSince); !got.Equal(tt.want) {
 				t.Errorf("Deadline = %v, want %v", got, tt.want)
 			}
 		})
@@ -270,6 +270,16 @@ func TestRelevantNodeChange(t *testing.T) {
 				t.Errorf("RelevantNodeChange = %v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+// TestDeadlineFromAcknowledgement: a node back from a short cut (never Unreachable, so
+// reachableSince is old) starts applying late: its timeout counts from then.
+func TestDeadlineFromAcknowledgement(t *testing.T) {
+	start := time.Date(2026, 11, 26, 10, 0, 0, 0, time.UTC)
+	acked := start.Add(5 * time.Minute)
+	if got, want := Deadline(2*time.Minute, start, start.Add(-time.Hour), acked), acked.Add(2*time.Minute); !got.Equal(want) {
+		t.Errorf("Deadline = %v, want %v", got, want)
 	}
 }
 

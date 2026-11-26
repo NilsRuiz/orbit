@@ -255,6 +255,9 @@ func TestHeartbeatRegistersNode(t *testing.T) {
 	if s.ReachableSince == nil || !s.ReachableSince.Time.Equal(t0) {
 		t.Errorf("reachableSince = %v, want %v (first contact)", s.ReachableSince, t0)
 	}
+	if s.RolloutIDSince == nil || !s.RolloutIDSince.Time.Equal(t0) {
+		t.Errorf("rolloutIdSince = %v, want %v (rollout id first reported)", s.RolloutIDSince, t0)
+	}
 	if evs := drainEvents(rec); !hasEvent(evs, "Normal Registered") {
 		t.Errorf("events = %q, want Registered", evs)
 	}
@@ -331,12 +334,25 @@ func TestHeartbeatWriteBudget(t *testing.T) {
 		t.Errorf("lastSeen = %v, want %v", en.Status.LastSeen, t0.Add(time.Minute))
 	}
 
-	// Any other change is written at once, with a fresh lastSeen.
+	// Any other change is written at once, with a fresh lastSeen. A new rollout id
+	// records when the node adopted it.
 	clk.set(t0.Add(70 * time.Second))
-	heartbeat(t, h, name, Heartbeat{NodeID: name, Current: "1.0.0", Phase: "applying"})
+	heartbeat(t, h, name, Heartbeat{NodeID: name, Current: "1.0.0", Phase: "applying", RolloutID: "r-g1"})
 	barrier(t, h)
-	if en, _ = get(t, name); en.Status.Phase != "applying" || !en.Status.LastSeen.Time.Equal(t0.Add(70*time.Second)) {
+	en, _ = get(t, name)
+	if en.Status.Phase != "applying" || !en.Status.LastSeen.Time.Equal(t0.Add(70*time.Second)) {
 		t.Errorf("status = %+v", en.Status)
+	}
+	if en.Status.RolloutIDSince == nil || !en.Status.RolloutIDSince.Time.Equal(t0.Add(70*time.Second)) {
+		t.Errorf("rolloutIdSince = %v, want %v", en.Status.RolloutIDSince, t0.Add(70*time.Second))
+	}
+
+	// The same id later does not move it.
+	clk.set(t0.Add(3 * time.Minute))
+	heartbeat(t, h, name, Heartbeat{NodeID: name, Current: "1.1.0", Phase: "idle", RolloutID: "r-g1"})
+	barrier(t, h)
+	if en, _ = get(t, name); !en.Status.RolloutIDSince.Time.Equal(t0.Add(70 * time.Second)) {
+		t.Errorf("rolloutIdSince moved to %v on an unchanged rollout id", en.Status.RolloutIDSince)
 	}
 }
 
