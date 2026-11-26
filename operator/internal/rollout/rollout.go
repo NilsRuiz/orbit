@@ -7,6 +7,7 @@ package rollout
 import (
 	"cmp"
 	"hash/fnv"
+	"maps"
 	"slices"
 	"time"
 
@@ -73,7 +74,24 @@ const (
 	// Pending: unreachable (out of range) and not known to have succeeded or failed.
 	// Not a failure.
 	Pending Result = "Pending"
+	// Stuck: InProgress past its Deadline. Counts as failed. The controller assigns it;
+	// Classify does not know the time.
+	Stuck Result = "Stuck"
 )
+
+// Deadline is when an InProgress node becomes Stuck: the gate timeout counted from the
+// wave start, or from the node's return in range if later (EdgeNode
+// status.reachableSince). A satellite back after hours gets the full timeout to apply.
+func Deadline(waveStart, reachableSince time.Time, timeout time.Duration) time.Time {
+	return later(waveStart, reachableSince).Add(timeout)
+}
+
+func later(a, b time.Time) time.Time {
+	if b.After(a) {
+		return b
+	}
+	return a
+}
 
 // Classify tells where a node stands in the rollout rolloutID to version target. A known
 // outcome (success or failure) stands even when the node is out of range now.
@@ -105,24 +123,24 @@ const (
 
 // Gate is the verdict and the counts it was based on.
 type Gate struct {
-	Decision                               Decision
-	Succeeded, Failed, InProgress, Pending int32
-	// TimedOut: reachable nodes still in progress at the timeout were counted as failed.
+	Decision                                      Decision
+	Succeeded, Failed, InProgress, Pending, Stuck int32
+	// TimedOut: some nodes were Stuck, and counted as failed.
 	TimedOut bool
 }
 
 // EvaluateGate applies the health gate to the results of every node of the waves started
-// so far, elapsed after the current wave started.
+// so far.
 //
 //   - Pending (unreachable) nodes never count: out of range is not a failure.
+//   - Stuck nodes (past their Deadline) count as failed.
 //   - Halt as soon as failed / (succeeded + failed + inProgress) > maxFailurePercent: the
 //     gate cannot pass even if every node in progress succeeds.
 //   - Promote once no reachable node is in progress, if failed / (succeeded + failed) <=
 //     maxFailurePercent.
-//   - At the timeout, reachable nodes still in progress are stuck and count as failed.
-//   - With no result at all but pending nodes, wait, even after the timeout: promoting
-//     would be blind, halting would treat being out of range as failing.
-func EvaluateGate(results []Result, maxFailurePercent int32, elapsed, timeout time.Duration) Gate {
+//   - With no result at all but pending nodes, wait: promoting would be blind, halting
+//     would treat being out of range as failing.
+func EvaluateGate(results []Result, maxFailurePercent int32) Gate {
 	var g Gate
 	for _, r := range results {
 		switch r {
@@ -134,26 +152,21 @@ func EvaluateGate(results []Result, maxFailurePercent int32, elapsed, timeout ti
 			g.InProgress++
 		case Pending:
 			g.Pending++
+		case Stuck:
+			g.Stuck++
 		}
 	}
+	g.TimedOut = g.Stuck > 0
 	tooMany := func(failed, total int32) bool {
 		return int64(failed)*100 > int64(maxFailurePercent)*int64(total)
 	}
 
-	failed, inProgress := g.Failed, g.InProgress
-	if tooMany(failed, g.Succeeded+failed+inProgress) {
-		g.Decision = Halt
-		return g
-	}
-	if inProgress > 0 {
-		if elapsed < timeout {
-			g.Decision = Wait
-			return g
-		}
-		g.TimedOut = true
-		failed += inProgress
-	}
+	failed := g.Failed + g.Stuck
 	switch {
+	case tooMany(failed, g.Succeeded+failed+g.InProgress):
+		g.Decision = Halt
+	case g.InProgress > 0:
+		g.Decision = Wait
 	case g.Succeeded+failed == 0 && g.Pending > 0:
 		g.Decision = Wait
 	case tooMany(failed, g.Succeeded+failed):
@@ -162,4 +175,13 @@ func EvaluateGate(results []Result, maxFailurePercent int32, elapsed, timeout ti
 		g.Decision = Promote
 	}
 	return g
+}
+
+// RelevantNodeChange reports whether an EdgeNode update can move a rollout: membership
+// (labels) or anything Classify reads. lastSeen and sequence writes are ignored.
+func RelevantNodeChange(old, updated *fleetv1alpha1.EdgeNode) bool {
+	o, u := old.Status, updated.Status
+	return !maps.Equal(old.Labels, updated.Labels) ||
+		o.Reachability != u.Reachability || o.Phase != u.Phase ||
+		o.CurrentVersion != u.CurrentVersion || o.RolloutID != u.RolloutID
 }

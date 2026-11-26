@@ -54,6 +54,13 @@ func TestPlanEnsure(t *testing.T) {
 			wantWrite: true,
 		},
 		{
+			// Once a run reverted a node, it must never push its version again, even if a
+			// reconcile acts on a stale view of the rollout.
+			name:  "node already reverted by this run",
+			entry: Entry{Exists: true, Revision: 6, Value: Value{Version: "1.1.0", RolloutID: id + RevertSuffix}},
+			want:  Value{Version: "1.1.0", RolloutID: id + RevertSuffix},
+		},
+		{
 			name:      "reverted value of an earlier rollout",
 			entry:     Entry{Exists: true, Value: Value{Version: "1.1.0", RolloutID: "payload-g1" + RevertSuffix}},
 			want:      Value{Version: target, RolloutID: id, PreviousVersion: "1.1.0"},

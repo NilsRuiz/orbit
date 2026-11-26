@@ -204,3 +204,37 @@ func TestEnsureOverInvalidValue(t *testing.T) {
 		t.Errorf("after Ensure: %+v", v)
 	}
 }
+
+func TestLazyOpensOnceTheBucketExists(t *testing.T) {
+	s, err := server.NewServer(&server.Options{Host: "127.0.0.1", Port: -1, JetStream: true, StoreDir: t.TempDir(), NoLog: true, NoSigs: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	go s.Start()
+	if !s.ReadyForConnections(5 * time.Second) {
+		t.Fatal("nats server not ready")
+	}
+	defer s.Shutdown()
+	nc, err := nats.Connect(s.ClientURL())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer nc.Close()
+	js, _ := jetstream.New(nc)
+	ctx := context.Background()
+
+	l := &Lazy{JS: js}
+	if _, err := l.Store(ctx); err == nil {
+		t.Fatal("Store succeeded before the bucket exists")
+	}
+	if _, err := js.CreateKeyValue(ctx, jetstream.KeyValueConfig{Bucket: Bucket}); err != nil {
+		t.Fatal(err)
+	}
+	st, err := l.Store(ctx)
+	if err != nil {
+		t.Fatalf("Store after the bucket was created: %v", err)
+	}
+	if again, _ := l.Store(ctx); again != st {
+		t.Error("Store reopened the bucket instead of reusing it")
+	}
+}

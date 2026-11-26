@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"crypto/tls"
 	"flag"
 	"log/slog"
@@ -8,6 +9,7 @@ import (
 
 	"github.com/go-logr/logr"
 	"github.com/nats-io/nats.go"
+	"github.com/nats-io/nats.go/jetstream"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
@@ -24,6 +26,7 @@ import (
 
 	fleetv1alpha1 "github.com/NilsRuiz/orbit/operator/api/v1alpha1"
 	"github.com/NilsRuiz/orbit/operator/internal/controller"
+	"github.com/NilsRuiz/orbit/operator/internal/desired"
 	"github.com/NilsRuiz/orbit/operator/internal/ingest"
 	// +kubebuilder:scaffold:imports
 )
@@ -200,6 +203,28 @@ func main() {
 	}
 	if err := (&controller.FleetReconciler{Client: mgr.GetClient()}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "Failed to create controller", "controller", "Fleet")
+		os.Exit(1)
+	}
+	js, err := jetstream.New(nc)
+	if err != nil {
+		setupLog.Error(err, "Failed to create the JetStream context")
+		os.Exit(1)
+	}
+	// Opened on first use: the hub may create the bucket after the operator starts.
+	store := &desired.Lazy{JS: js}
+	if err := (&controller.RolloutReconciler{
+		Client:    mgr.GetClient(),
+		APIReader: mgr.GetAPIReader(),
+		Recorder:  mgr.GetEventRecorder("orbit-operator"),
+		Store: func(ctx context.Context) (controller.DesiredStore, error) {
+			s, err := store.Store(ctx)
+			if err != nil {
+				return nil, err // not a typed nil inside the interface
+			}
+			return s, nil
+		},
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "Failed to create controller", "controller", "Rollout")
 		os.Exit(1)
 	}
 	// +kubebuilder:scaffold:builder

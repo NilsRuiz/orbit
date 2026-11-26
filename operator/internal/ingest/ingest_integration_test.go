@@ -251,6 +251,9 @@ func TestHeartbeatRegistersNode(t *testing.T) {
 	if !s.LastSeen.Time.Equal(t0) {
 		t.Errorf("lastSeen = %v, want %v", s.LastSeen, t0)
 	}
+	if s.ReachableSince == nil || !s.ReachableSince.Time.Equal(t0) {
+		t.Errorf("reachableSince = %v, want %v (first contact)", s.ReachableSince, t0)
+	}
 	if evs := drainEvents(rec); !hasEvent(evs, "Normal Registered") {
 		t.Errorf("events = %q, want Registered", evs)
 	}
@@ -359,6 +362,9 @@ func TestHeartbeatRestoresReachability(t *testing.T) {
 	})
 	if evs := drainEvents(rec); !hasEvent(evs, "Normal ContactRestored") {
 		t.Errorf("events = %q, want ContactRestored", evs)
+	}
+	if en, _ := get(t, name); en.Status.ReachableSince == nil || !en.Status.ReachableSince.Time.Equal(t0) {
+		t.Errorf("reachableSince = %v, want %v (back in contact)", en.Status.ReachableSince, t0)
 	}
 }
 

@@ -77,26 +77,72 @@ const (
 	RolloutSucceeded   RolloutPhase = "Succeeded"
 )
 
-// RolloutStatus is the operator's progress report.
+// RolloutStatus is the operator's progress report, and the state it resumes from.
 type RolloutStatus struct {
+	// observedGeneration is the spec generation this status is about.
+	// +optional
+	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
+
+	// rolloutId identifies this run in desired states and agent reports:
+	// <name>-g<generation>, taken when the run started. A run restarts from the first
+	// wave only when targetVersion or fleetRef change; editing paused, waves or the
+	// health gate applies to the run in progress.
+	// +optional
+	RolloutID string `json:"rolloutId,omitempty"`
+
+	// targetVersion and fleetRef of the run in progress.
+	// +optional
+	TargetVersion string `json:"targetVersion,omitempty"`
+	// +optional
+	FleetRef string `json:"fleetRef,omitempty"`
+
 	// +optional
 	Phase RolloutPhase `json:"phase,omitempty"`
 	// currentWave is the index (0-based) of the wave in progress.
 	// +optional
 	CurrentWave int32 `json:"currentWave"`
+
+	// waveStartTime is when the current wave started: the health gate timeout counts
+	// from it.
+	// +optional
+	WaveStartTime *metav1.Time `json:"waveStartTime,omitempty"`
+
+	// soakUntil is set once the current wave's gate passed: the next wave starts after
+	// it (spec.waves[].pauseFor).
+	// +optional
+	SoakUntil *metav1.Time `json:"soakUntil,omitempty"`
+
+	// nodes is the fleet size when the status was computed.
+	// +optional
+	Nodes int32 `json:"nodes"`
+	// updated counts nodes of started waves that run the target version.
 	// +optional
 	Updated int32 `json:"updated"`
+	// failed counts nodes of started waves that rolled back from the target version.
 	// +optional
 	Failed int32 `json:"failed"`
 	// pending counts nodes of started waves that are unreachable and not yet updated.
 	// +optional
 	Pending int32 `json:"pending"`
 
+	// conditions: Ready is True once Succeeded; its reason tells why not otherwise.
 	// +listType=map
 	// +listMapKey=type
 	// +optional
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
 }
+
+// Rollout condition type and reasons.
+const (
+	RolloutReady = "Ready"
+
+	ReasonFleetNotFound   = "FleetNotFound"
+	ReasonProgressing     = "Progressing"
+	ReasonWaitingPending  = "WaitingForPendingNodes"
+	ReasonPaused          = "Paused"
+	ReasonGateFailed      = "HealthGateFailed"
+	ReasonRolloutComplete = "Succeeded"
+)
 
 // +kubebuilder:object:root=true
 // +kubebuilder:resource:scope=Cluster,shortName=ro
@@ -104,6 +150,9 @@ type RolloutStatus struct {
 // +kubebuilder:printcolumn:name="Target",type=string,JSONPath=`.spec.targetVersion`
 // +kubebuilder:printcolumn:name="Phase",type=string,JSONPath=`.status.phase`
 // +kubebuilder:printcolumn:name="Wave",type=integer,JSONPath=`.status.currentWave`
+// +kubebuilder:printcolumn:name="Updated",type=integer,JSONPath=`.status.updated`
+// +kubebuilder:printcolumn:name="Failed",type=integer,JSONPath=`.status.failed`
+// +kubebuilder:printcolumn:name="Pending",type=integer,JSONPath=`.status.pending`
 
 // Rollout moves a fleet to a target version in waves, gated on agent health (ADR-0004).
 type Rollout struct {

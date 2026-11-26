@@ -143,7 +143,7 @@ func TestClassify(t *testing.T) {
 	}
 }
 
-func results(s, f, ip, p int) []Result {
+func results(s, f, ip, p int, stuck ...int) []Result {
 	out := make([]Result, 0, s+f+ip+p)
 	for range s {
 		out = append(out, Succeeded)
@@ -157,47 +157,49 @@ func results(s, f, ip, p int) []Result {
 	for range p {
 		out = append(out, Pending)
 	}
+	for _, n := range stuck {
+		for range n {
+			out = append(out, Stuck)
+		}
+	}
 	return out
 }
 
 func TestEvaluateGate(t *testing.T) {
-	const timeout = 10 * time.Minute
-	early, late := time.Minute, timeout
 	tests := []struct {
 		name     string
 		results  []Result
 		max      int32
-		elapsed  time.Duration
 		want     Decision
 		timedOut bool
 	}{
-		{"all succeeded", results(3, 0, 0, 0), 0, early, Promote, false},
-		{"waiting for reachable nodes", results(1, 0, 2, 0), 0, early, Wait, false},
+		{"all succeeded", results(3, 0, 0, 0), 0, Promote, false},
+		{"waiting for reachable nodes", results(1, 0, 2, 0), 0, Wait, false},
 		// max 0 %: the first failure halts, without waiting for the others.
-		{"zero tolerance, one failure", results(5, 1, 4, 0), 0, early, Halt, false},
-		{"100 % tolerance never halts", results(0, 5, 0, 0), 100, early, Promote, false},
+		{"zero tolerance, one failure", results(5, 1, 4, 0), 0, Halt, false},
+		{"100 % tolerance never halts", results(0, 5, 0, 0), 100, Promote, false},
 		// Exactly at the threshold is accepted: failed / decided <= max.
-		{"ratio equal to max", results(3, 1, 0, 0), 25, early, Promote, false},
-		{"ratio above max", results(2, 1, 0, 0), 25, early, Halt, false},
+		{"ratio equal to max", results(3, 1, 0, 0), 25, Promote, false},
+		{"ratio above max", results(2, 1, 0, 0), 25, Halt, false},
 		// 1 failure out of 10 reachable is 10 % even if the 8 in progress succeed: under
 		// 20 %, so wait. 3 failures exceed 20 % whatever the others do: halt now.
-		{"can still pass", results(1, 1, 8, 0), 20, early, Wait, false},
-		{"cannot pass anymore", results(1, 3, 6, 0), 20, early, Halt, false},
+		{"can still pass", results(1, 1, 8, 0), 20, Wait, false},
+		{"cannot pass anymore", results(1, 3, 6, 0), 20, Halt, false},
 		// Unreachable nodes are pending, not failed.
-		{"pending do not count", results(2, 0, 0, 5), 0, early, Promote, false},
-		{"all pending", results(0, 0, 0, 4), 0, early, Wait, false},
+		{"pending do not count", results(2, 0, 0, 5), 0, Promote, false},
 		// No evidence: promoting would be blind, halting would treat range as failure.
-		{"all pending after timeout", results(0, 0, 0, 4), 0, late, Wait, false},
-		// Reachable nodes still in progress at the timeout are stuck: they count as failed.
-		{"timeout, stuck nodes", results(3, 0, 1, 0), 0, late, Halt, true},
-		{"timeout within tolerance", results(9, 0, 1, 0), 10, late, Promote, true},
-		{"timeout, only stuck nodes", results(0, 0, 2, 3), 0, late, Halt, true},
+		{"all pending", results(0, 0, 0, 4), 0, Wait, false},
+		// Nodes past their deadline (Deadline) are stuck: they count as failed.
+		{"stuck node", results(3, 0, 0, 0, 1), 0, Halt, true},
+		{"stuck within tolerance", results(9, 0, 0, 0, 1), 10, Promote, true},
+		{"only stuck nodes", results(0, 0, 0, 3, 2), 0, Halt, true},
+		{"stuck and others in progress", results(9, 0, 5, 0, 1), 10, Wait, true},
 		// Nothing to verify (empty fleet): nothing blocks promotion.
-		{"no nodes", nil, 0, early, Promote, false},
+		{"no nodes", nil, 0, Promote, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			g := EvaluateGate(tt.results, tt.max, tt.elapsed, timeout)
+			g := EvaluateGate(tt.results, tt.max)
 			if g.Decision != tt.want || g.TimedOut != tt.timedOut {
 				t.Errorf("EvaluateGate = %+v, want %s (timedOut %v)", g, tt.want, tt.timedOut)
 			}
@@ -206,8 +208,63 @@ func TestEvaluateGate(t *testing.T) {
 }
 
 func TestEvaluateGateCounts(t *testing.T) {
-	g := EvaluateGate(results(2, 1, 3, 4), 50, time.Minute, 10*time.Minute)
-	if g.Succeeded != 2 || g.Failed != 1 || g.InProgress != 3 || g.Pending != 4 {
+	g := EvaluateGate(results(2, 1, 3, 4, 1), 50)
+	if g.Succeeded != 2 || g.Failed != 1 || g.InProgress != 3 || g.Pending != 4 || g.Stuck != 1 {
 		t.Errorf("counts = %+v", g)
+	}
+}
+
+// TestDeadline: a node back in range gets the full timeout from its return, not from the
+// wave start, or every satellite returning late would look stuck.
+func TestDeadline(t *testing.T) {
+	start := time.Date(2026, 11, 26, 10, 0, 0, 0, time.UTC)
+	const timeout = 10 * time.Minute
+	tests := []struct {
+		name           string
+		reachableSince time.Time
+		want           time.Time
+	}{
+		{"reachable since before the wave", start.Add(-time.Hour), start.Add(timeout)},
+		{"never recorded", time.Time{}, start.Add(timeout)},
+		{"back in range hours later", start.Add(3 * time.Hour), start.Add(3*time.Hour + timeout)},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := Deadline(start, tt.reachableSince, timeout); !got.Equal(tt.want) {
+				t.Errorf("Deadline = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestRelevantNodeChange(t *testing.T) {
+	base := fleetv1alpha1.EdgeNode{Status: fleetv1alpha1.EdgeNodeStatus{
+		Reachability: fleetv1alpha1.Reachable, Phase: "idle", CurrentVersion: "1.0.0", RolloutID: "r-g1",
+	}}
+	base.Labels = map[string]string{"orbit.io/constellation": "alpha"}
+	change := func(f func(*fleetv1alpha1.EdgeNode)) fleetv1alpha1.EdgeNode {
+		n := *base.DeepCopy()
+		f(&n)
+		return n
+	}
+	tests := []struct {
+		name    string
+		updated fleetv1alpha1.EdgeNode
+		want    bool
+	}{
+		{"phase", change(func(n *fleetv1alpha1.EdgeNode) { n.Status.Phase = "applying" }), true},
+		{"version", change(func(n *fleetv1alpha1.EdgeNode) { n.Status.CurrentVersion = "1.1.0" }), true},
+		{"rollout id", change(func(n *fleetv1alpha1.EdgeNode) { n.Status.RolloutID = "r-g2" }), true},
+		{"reachability", change(func(n *fleetv1alpha1.EdgeNode) { n.Status.Reachability = fleetv1alpha1.Unreachable }), true},
+		{"labels", change(func(n *fleetv1alpha1.EdgeNode) { n.Labels = nil }), true},
+		{"lastSeen only", change(func(n *fleetv1alpha1.EdgeNode) { n.Status.ObservedStatusSeq = 9 }), false},
+		{"nothing", base, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := RelevantNodeChange(&base, &tt.updated); got != tt.want {
+				t.Errorf("RelevantNodeChange = %v, want %v", got, tt.want)
+			}
+		})
 	}
 }
