@@ -94,6 +94,21 @@ Pending ─► Progressing(wave i) ─► health gate ─┬─ pass ─► wave
    write the previous version back for the wave.
 5. Use `RequeueAfter` (not busy loops); make every step idempotent (KV revision checks).
 
+The rules are pure functions in `internal/rollout` (planned controller in #46):
+
+- **Waves** (`PlanWaves`): wave *i* ends with `ceil(percent × N / 100)` nodes, so a 10 %
+  wave reaches at least one node. Nodes are ordered by a hash of the rollout name and the
+  node name: the same canaries for every release of a `Rollout`, not alphabetical, and a
+  node joining the fleet does not reshuffle the others.
+- **Node result** (`Classify`): `Succeeded` (idle on target), `Failed` (rolled back from
+  *this* rollout), `Pending` (unreachable, outcome unknown) or `InProgress`.
+- **Gate** (`EvaluateGate`), over all waves started so far:
+  - halts early once failures exceed the threshold even if every node in progress
+    succeeds;
+  - at the timeout, reachable nodes still in progress count as failed;
+  - if every node is pending, it waits, even past the timeout: no blind promotion, and
+    out of range is not a failure.
+
 ## Testing strategy
 
 - Unit tests for wave planning and gate evaluation (pure functions).
