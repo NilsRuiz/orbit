@@ -6,6 +6,7 @@
 
 ![status](https://img.shields.io/badge/status-WIP-orange)
 [![agent](https://github.com/NilsRuiz/orbit/actions/workflows/agent.yml/badge.svg?branch=main)](https://github.com/NilsRuiz/orbit/actions/workflows/agent.yml)
+[![operator](https://github.com/NilsRuiz/orbit/actions/workflows/operator.yml/badge.svg?branch=main)](https://github.com/NilsRuiz/orbit/actions/workflows/operator.yml)
 
 ## Why this project
 
