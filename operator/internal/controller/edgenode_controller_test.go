@@ -9,6 +9,7 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/events"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -17,10 +18,16 @@ import (
 	"github.com/NilsRuiz/orbit/operator/internal/testenv"
 )
 
-var k8s client.Client
+var (
+	k8s client.Client
+	// cfg reaches the envtest API server, for tests that run a manager.
+	cfg *rest.Config
+)
 
 func TestMain(m *testing.M) {
-	cfg, stop, err := testenv.Start()
+	var stop func()
+	var err error
+	cfg, stop, err = testenv.Start()
 	if err != nil {
 		println("envtest:", err.Error())
 		os.Exit(1)

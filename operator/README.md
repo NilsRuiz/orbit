@@ -66,6 +66,19 @@ may start before NATS), `-nats-creds`, `-log-level`. Logs are JSON (`log/slog`):
 that cannot name a valid node, or whose payload `nodeId` differs from the subject, are
 dropped with a `dropping heartbeat` / `dropping status event` warning.
 
+**Fleet controller**: resolves `spec.selector` and reports `nodes`, `reachable` and
+`unreachable` (a node never seen counts as unreachable). An EdgeNode change wakes only
+the fleets that select the node, before or after the change, so a relabelled node
+updates both the fleet it leaves and the one it joins. Writes that change neither labels
+nor reachability (`lastSeen`, version) wake no fleet. An empty selector selects every
+node; an invalid one sets `Ready=False` (`InvalidSelector`).
+
+```
+$ kubectl get fleets
+NAME                  NODES   REACHABLE   UNREACHABLE   READY
+constellation-alpha   2       2           0             True
+```
+
 **Rollout controller** — reconcile loop:
 
 ```
