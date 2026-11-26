@@ -9,6 +9,11 @@
       "release-type": "go",
       "component": "agent",
       "changelog-path": "CHANGELOG.md"
+    },
+    "operator": {
+      "release-type": "go",
+      "component": "operator",
+      "changelog-path": "CHANGELOG.md"
     }
   }
 }
