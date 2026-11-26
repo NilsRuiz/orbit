@@ -124,6 +124,10 @@ func TestClassify(t *testing.T) {
 		{"idle on target", st(r, "idle", target, id), Succeeded},
 		{"already on target before the rollout", st(r, "idle", target, ""), Succeeded},
 		{"succeeded then out of range", st(u, "idle", target, id), Succeeded},
+		// A node that rolled back in an earlier run already runs the target of this one:
+		// the agent ignores a desired state equal to its current version and stays
+		// rolled-back, so phase alone would keep it in progress forever.
+		{"rolled back earlier, already on target", st(r, "rolled-back", target, "older"), Succeeded},
 		{"rolled back by this rollout", st(r, "rolled-back", "1.1.0", id), Failed},
 		{"failure known, then out of range", st(u, "rolled-back", "1.1.0", id), Failed},
 		// A rollback from an earlier rollout says nothing about this version.
@@ -230,7 +234,7 @@ func TestDeadline(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := Deadline(start, tt.reachableSince, timeout); !got.Equal(tt.want) {
+			if got := Deadline(timeout, start, tt.reachableSince); !got.Equal(tt.want) {
 				t.Errorf("Deadline = %v, want %v", got, tt.want)
 			}
 		})
@@ -264,6 +268,41 @@ func TestRelevantNodeChange(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := RelevantNodeChange(&base, &tt.updated); got != tt.want {
 				t.Errorf("RelevantNodeChange = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestDeadlineFromAcknowledgement: a node back from a short cut (never Unreachable, so
+// reachableSince is old) starts applying late: its timeout counts from then.
+func TestDeadlineFromAcknowledgement(t *testing.T) {
+	start := time.Date(2026, 11, 26, 10, 0, 0, 0, time.UTC)
+	acked := start.Add(5 * time.Minute)
+	if got, want := Deadline(2*time.Minute, start, start.Add(-time.Hour), acked), acked.Add(2*time.Minute); !got.Equal(want) {
+		t.Errorf("Deadline = %v, want %v", got, want)
+	}
+}
+
+// TestAtDeadline: at its deadline, an InProgress node is Stuck only if it acknowledged
+// this run (the agent adopts the rolloutId as soon as it starts applying). A node that
+// never did has not received the desired state: it left range before being marked
+// Unreachable (that takes 2 × contactInterval), so it is Pending, not failing.
+func TestAtDeadline(t *testing.T) {
+	const id = "payload-g2"
+	tests := []struct {
+		name   string
+		status fleetv1alpha1.EdgeNodeStatus
+		want   Result
+	}{
+		{"applying this run", fleetv1alpha1.EdgeNodeStatus{Phase: "applying", RolloutID: id}, Stuck},
+		{"verifying this run", fleetv1alpha1.EdgeNodeStatus{Phase: "verifying", RolloutID: id}, Stuck},
+		{"never received this run", fleetv1alpha1.EdgeNodeStatus{Phase: "idle", RolloutID: "payload-g1"}, Pending},
+		{"no rollout yet", fleetv1alpha1.EdgeNodeStatus{Phase: "idle"}, Pending},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := AtDeadline(tt.status, id); got != tt.want {
+				t.Errorf("AtDeadline = %s, want %s", got, tt.want)
 			}
 		})
 	}

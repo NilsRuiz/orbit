@@ -1,0 +1,11 @@
+# The demo fleet: satellites labelled orbit.io/constellation=alpha by their agent
+# (ORBIT_NODE_LABELS in hack/compose/docker-compose.yml): sat-1 and sat-2. sat-3 is in
+# constellation beta and is never touched by this rollout.
+apiVersion: fleet.orbit.io/v1alpha1
+kind: Fleet
+metadata:
+  name: constellation-alpha
+spec:
+  selector:
+    matchLabels:
+      orbit.io/constellation: alpha

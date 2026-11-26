@@ -97,10 +97,15 @@ resume anywhere. The status keeps where the run is: `currentWave`, `waveStartTim
 - **Writes**: `{"version", "rolloutId", "previousVersion"}` is written to
   `orbit-desired/<node>` for every node of the started waves, including unreachable ones,
   which apply it once back in range.
-- **Gate timeout, per node**: it counts from the wave start or from the node's return in
-  range (`EdgeNode.status.reachableSince`), whichever is later. A satellite back after
-  hours gets the full timeout to apply; a reachable node that does not converge in time
-  is `Stuck` and counts as failed.
+- **Gate timeout, per node**: it counts from the latest of the wave start, the node's
+  return in range (`EdgeNode.status.reachableSince`) and the moment it adopted this run's
+  `rolloutId` (`status.rolloutIdSince`, i.e. started applying). A satellite back after
+  hours, or after a short link cut that never made it Unreachable, gets the full timeout
+  from when it starts applying.
+  - At its deadline, a node is `Stuck`, and counts as failed, only if it acknowledged the
+    run.
+  - Otherwise it never received the desired state, so it is `Pending`: it left range
+    before being marked Unreachable, which takes 2 × `contactInterval`.
 - **Halt** reverts the current wave only: earlier waves passed their gate. A run never
   re-writes a node it reverted.
 - **The last wave** does not complete while some nodes are pending (out of range). The

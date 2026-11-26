@@ -74,23 +74,38 @@ const (
 	// Pending: unreachable (out of range) and not known to have succeeded or failed.
 	// Not a failure.
 	Pending Result = "Pending"
-	// Stuck: InProgress past its Deadline. Counts as failed. The controller assigns it;
-	// Classify does not know the time.
+	// Stuck: InProgress past its Deadline, though it acknowledged this run
+	// (AtDeadline). Counts as failed. The controller assigns it; Classify does not know
+	// the time.
 	Stuck Result = "Stuck"
 )
 
 // Deadline is when an InProgress node becomes Stuck: the gate timeout counted from the
-// wave start, or from the node's return in range if later (EdgeNode
-// status.reachableSince). A satellite back after hours gets the full timeout to apply.
-func Deadline(waveStart, reachableSince time.Time, timeout time.Duration) time.Time {
-	return later(waveStart, reachableSince).Add(timeout)
+// latest of starts — the wave start, the node's return in range (EdgeNode
+// status.reachableSince), the moment it acknowledged the run (status.rolloutIdSince).
+// A node that only starts applying late, after hours out of range or a short link cut,
+// gets the full timeout from then.
+func Deadline(timeout time.Duration, starts ...time.Time) time.Time {
+	var latest time.Time
+	for _, t := range starts {
+		if t.After(latest) {
+			latest = t
+		}
+	}
+	return latest.Add(timeout)
 }
 
-func later(a, b time.Time) time.Time {
-	if b.After(a) {
-		return b
+// AtDeadline tells what an InProgress node past its Deadline is. Stuck if it
+// acknowledged this run: the agent adopts the rolloutId as soon as it starts applying, so
+// it received the version and does not converge. Otherwise it never received the desired
+// state: it left range before being marked Unreachable, which takes 2 × contactInterval,
+// so it is Pending rather than failing. No clock involved: lastSeen is written at most
+// once a minute and at second precision, too coarse to tell.
+func AtDeadline(s fleetv1alpha1.EdgeNodeStatus, rolloutID string) Result {
+	if s.RolloutID == rolloutID {
+		return Stuck
 	}
-	return a
+	return Pending
 }
 
 // Classify tells where a node stands in the rollout rolloutID to version target. A known
@@ -99,7 +114,10 @@ func Classify(s fleetv1alpha1.EdgeNodeStatus, target, rolloutID string) Result {
 	switch {
 	case s.Phase == "rolled-back" && s.RolloutID == rolloutID:
 		return Failed
-	case s.Phase == "idle" && s.CurrentVersion == target:
+	case s.CurrentVersion == target && (s.Phase == "idle" || s.Phase == "rolled-back"):
+		// rolled-back: the node failed an earlier run and went back to this run's
+		// target. The agent ignores a desired state equal to its current version, so it
+		// stays rolled-back while running the target.
 		return Succeeded
 	case s.Reachability != fleetv1alpha1.Reachable:
 		return Pending

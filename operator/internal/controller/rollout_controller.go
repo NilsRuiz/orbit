@@ -262,14 +262,17 @@ func (x *rolloutRun) evaluate(started []string, nodes map[string]*fleetv1alpha1.
 		st := nodes[n].Status
 		res := rollout.Classify(st, x.ro.Spec.TargetVersion, x.st.RolloutID)
 		if res == rollout.InProgress {
-			var since time.Time
+			starts := []time.Time{x.st.WaveStartTime.Time}
 			if st.ReachableSince != nil {
-				since = st.ReachableSince.Time
+				starts = append(starts, st.ReachableSince.Time)
 			}
-			deadline := rollout.Deadline(x.st.WaveStartTime.Time, since, x.ro.Spec.HealthGate.Timeout.Duration)
+			if st.RolloutIDSince != nil && st.RolloutID == x.st.RolloutID {
+				starts = append(starts, st.RolloutIDSince.Time) // acknowledged this run
+			}
+			deadline := rollout.Deadline(x.ro.Spec.HealthGate.Timeout.Duration, starts...)
 			switch {
 			case !x.now.Before(deadline):
-				res = rollout.Stuck
+				res = rollout.AtDeadline(st, x.st.RolloutID)
 			case next.IsZero() || deadline.Before(next):
 				next = deadline
 			}

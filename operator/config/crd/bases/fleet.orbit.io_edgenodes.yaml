@@ -169,6 +169,13 @@ spec:
                 description: rolloutId is the rollout that produced the node's current
                   desired state.
                 type: string
+              rolloutIdSince:
+                description: |-
+                  rolloutIdSince is when the hub saw the node adopt its current rolloutId, that is
+                  start applying that run's version. A rollout's health gate timeout for this node
+                  counts from it at the latest.
+                format: date-time
+                type: string
             type: object
         type: object
     served: true

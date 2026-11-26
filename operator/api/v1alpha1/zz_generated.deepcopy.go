@@ -95,6 +95,10 @@ func (in *EdgeNodeStatus) DeepCopyInto(out *EdgeNodeStatus) {
 		in, out := &in.ReachableSince, &out.ReachableSince
 		*out = (*in).DeepCopy()
 	}
+	if in.RolloutIDSince != nil {
+		in, out := &in.RolloutIDSince, &out.RolloutIDSince
+		*out = (*in).DeepCopy()
+	}
 	if in.Conditions != nil {
 		in, out := &in.Conditions, &out.Conditions
 		*out = make([]v1.Condition, len(*in))

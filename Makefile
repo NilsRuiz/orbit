@@ -93,6 +93,25 @@ link-restore: ## Restore the link of an edge node
 link-degrade: ## Add latency/loss on an edge link: make link-degrade NODE=sat-2
 	./hack/scripts/link.sh degrade $(NODE)
 
+##@ Hub cluster (k3d): the operator drives the compose fleet
+HUB_KUBECTL := kubectl --context k3d-orbit-hub
+
+hub-up: ## Create the k3d hub cluster and deploy the operator (re-run after a change)
+	./hack/k3d/hub.sh up
+
+hub-down: ## Delete the k3d hub cluster
+	./hack/k3d/hub.sh down
+
+demo-apply: ## Apply the demo Fleet and Rollout (hack/demo)
+	$(HUB_KUBECTL) apply -f hack/demo/fleet.yaml -f hack/demo/rollout.yaml
+
+demo-release: ## Release a version to the demo fleet: make demo-release VERSION=1.2.0
+	@test -n "$(VERSION)" || (echo "usage: make demo-release VERSION=1.2.0"; exit 1)
+	$(HUB_KUBECTL) patch rollout payload --type merge -p '{"spec":{"targetVersion":"$(VERSION)"}}'
+
+demo-watch: ## Watch nodes, fleets and rollouts
+	$(HUB_KUBECTL) get edgenodes,fleets,rollouts -o wide -w
+
 ##@ Infrastructure
 tf-fmt: ## Format Terraform
 	terraform fmt -recursive infra/terraform
@@ -107,4 +126,4 @@ tf-destroy: ## Destroy everything — run after each demo session!
 	terraform -chdir=$(TF_DIR) destroy
 
 .PHONY: help verify verify-go verify-tf verify-gitops verify-shell agent-test agent-lint agent-build dev-up dev-down logs desired status \
-        link-cut link-blackhole link-restore link-degrade tf-fmt tf-plan tf-apply tf-destroy
+        link-cut link-blackhole link-restore link-degrade hub-up hub-down demo-apply demo-release demo-watch tf-fmt tf-plan tf-apply tf-destroy

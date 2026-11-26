@@ -1,0 +1,17 @@
+# What a release looks like in Git: a PR changing targetVersion. Locally:
+#   make demo-release VERSION=1.2.0
+apiVersion: fleet.orbit.io/v1alpha1
+kind: Rollout
+metadata:
+  name: payload
+spec:
+  fleetRef: constellation-alpha
+  targetVersion: "1.1.0"
+  waves:
+    - percent: 50   # one canary out of two satellites
+      pauseFor: 20s # soak before the rest of the fleet
+    - percent: 100
+  healthGate:
+    maxFailurePercent: 0
+    # Longer than the agents' dead man's switch (ORBIT_VERIFY_TIMEOUT: 15s).
+    timeout: 2m
