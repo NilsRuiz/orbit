@@ -253,6 +253,11 @@ func connectNATS(url, creds string, log *slog.Logger) (*nats.Conn, error) {
 		nats.DisconnectErrHandler(func(_ *nats.Conn, err error) {
 			log.Warn("nats disconnected", "err", err)
 		}),
+		// Each failed attempt, including the first connection (RetryOnFailedConnect):
+		// otherwise an unreachable hub is silent until it answers.
+		nats.ReconnectErrHandler(func(_ *nats.Conn, err error) {
+			log.Warn("nats connection attempt failed", "err", err)
+		}),
 		nats.ReconnectHandler(func(c *nats.Conn) {
 			log.Info("nats reconnected", "url", c.ConnectedUrlRedacted())
 		}),
