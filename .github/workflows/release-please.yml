@@ -27,7 +27,7 @@ jobs:
           # Least privilege: only what release-please needs, only on this repository.
           permission-contents: write
           permission-pull-requests: write
-      - uses: googleapis/release-please-action@v4
+      - uses: googleapis/release-please-action@v5
         with:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
