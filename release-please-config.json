@@ -4,6 +4,7 @@
   "include-component-in-tag": true,
   "bump-minor-pre-major": true,
   "bump-patch-for-minor-pre-major": false,
+  "separate-pull-requests": true,
   "packages": {
     "agent": {
       "release-type": "go",
@@ -13,7 +14,8 @@
     "operator": {
       "release-type": "go",
       "component": "operator",
-      "changelog-path": "CHANGELOG.md"
+      "changelog-path": "CHANGELOG.md",
+      "initial-version": "0.1.0"
     }
   }
 }
