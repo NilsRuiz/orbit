@@ -198,6 +198,10 @@ func main() {
 		setupLog.Error(err, "Failed to create controller", "controller", "EdgeNode")
 		os.Exit(1)
 	}
+	if err := (&controller.FleetReconciler{Client: mgr.GetClient()}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "Failed to create controller", "controller", "Fleet")
+		os.Exit(1)
+	}
 	// +kubebuilder:scaffold:builder
 
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {

@@ -25,6 +25,15 @@ rules:
   - fleet.orbit.io
   resources:
   - edgenodes/status
+  - fleets/status
   verbs:
   - get
   - patch
+- apiGroups:
+  - fleet.orbit.io
+  resources:
+  - fleets
+  verbs:
+  - get
+  - list
+  - watch
