@@ -20,9 +20,10 @@ import (
 // Bucket is the desired-state KV bucket, created by the hub (hack/scripts/init-hub.sh).
 const Bucket = "orbit-desired"
 
-// RevertSuffix marks a value written by a revert: rolloutId "<id>-revert". The agent
-// reports it, so `kubectl get en` shows which nodes were reverted, and a second revert
-// does not recognise the value as its own.
+// RevertSuffix marks a value written by a revert: rolloutId "<id>-revert". A second
+// revert does not recognise the value as its own, and the run never re-writes the node.
+// Nodes that had updated apply the revert and report this id; a node that rolled back by
+// itself already runs the reverted version, so it stays rolled-back with "<id>".
 const RevertSuffix = "-revert"
 
 // ErrConflict means the entry changed between read and write. The caller retries from
