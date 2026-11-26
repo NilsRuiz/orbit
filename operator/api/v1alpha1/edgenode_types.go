@@ -31,7 +31,8 @@ type EdgeNodeStatus struct {
 	// +optional
 	Reachability Reachability `json:"reachability,omitempty"`
 
-	// lastSeen is the time of the last heartbeat or status event.
+	// lastSeen is when the hub last heard from the node (hub clock), written at most once
+	// a minute.
 	// +optional
 	LastSeen *metav1.Time `json:"lastSeen,omitempty"`
 
@@ -47,6 +48,11 @@ type EdgeNodeStatus struct {
 	// rolloutId is the rollout that produced the node's current desired state.
 	// +optional
 	RolloutID string `json:"rolloutId,omitempty"`
+
+	// observedStatusSeq is the ORBIT_STATUS stream sequence of the last status event
+	// applied. Older or replayed events are ignored (ADR-0007).
+	// +optional
+	ObservedStatusSeq int64 `json:"observedStatusSeq,omitempty"`
 
 	// conditions represent the latest observations of the node.
 	// +listType=map
