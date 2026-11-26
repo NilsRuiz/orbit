@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.3.0](https://github.com/NilsRuiz/orbit/compare/agent-v0.2.0...agent-v0.3.0) (2026-11-26)
+
+
+### Features
+
+* **agent:** send phase, rollout id and labels in heartbeats ([#58](https://github.com/NilsRuiz/orbit/issues/58)) ([b17d938](https://github.com/NilsRuiz/orbit/commit/b17d938f597ea62db943e7207258740a5644a8ff))
+* **operator:** add the desired-state store with revert trail ([#63](https://github.com/NilsRuiz/orbit/issues/63)) ([e02ec8d](https://github.com/NilsRuiz/orbit/commit/e02ec8d4c4bbb7dedaacab6ba26a74ecfb3b8fb7)), closes [#46](https://github.com/NilsRuiz/orbit/issues/46)
+
 ## [0.2.0](https://github.com/NilsRuiz/orbit/compare/agent-v0.1.0...agent-v0.2.0) (2026-11-24)
 
 
