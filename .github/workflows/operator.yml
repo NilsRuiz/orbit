@@ -6,6 +6,7 @@ on:
   push:
     branches: [main]
     paths: ["operator/**", ".github/workflows/operator.yml"]
+    tags: ["operator-v*"]   # created by release-please
 
 permissions:
   contents: read
@@ -41,3 +42,60 @@ jobs:
           # Pinned: keep in sync with GOLANGCI_LINT_VERSION in operator/Makefile.
           version: v2.15.0
           working-directory: operator
+
+  # Same pipeline as the agent image (agent.yml): multi-arch build, provenance and SBOM,
+  # keyless cosign signature, Trivy scan. Tags: sha-<commit>, plus main or the version.
+  image:
+    needs: test
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write   # push to GHCR
+      id-token: write   # keyless cosign signing (OIDC)
+    steps:
+      - uses: actions/checkout@v7
+      - id: tags
+        name: Compute image name and tags
+        run: |
+          # OCI repository names must be lowercase; the owner keeps its case (e.g. NilsRuiz).
+          image="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/orbit-operator"
+          tags="${image}:sha-${GITHUB_SHA}"
+          if [[ "$GITHUB_REF" == refs/tags/operator-v* ]]; then
+            tags="${tags},${image}:${GITHUB_REF_NAME#operator-v}"
+          else
+            tags="${tags},${image}:main"
+          fi
+          echo "image=${image}" >> "$GITHUB_OUTPUT"
+          echo "tags=${tags}" >> "$GITHUB_OUTPUT"
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: operator
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.tags.outputs.tags }}
+          cache-from: type=gha,scope=operator
+          cache-to: type=gha,mode=max,scope=operator
+          provenance: true
+          sbom: true
+      - uses: sigstore/cosign-installer@v3
+      - name: Sign image (keyless)
+        env:
+          IMAGE: ${{ steps.tags.outputs.image }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: cosign sign --yes "${IMAGE}@${DIGEST}"
+      - name: Scan image
+        env:
+          IMAGE: ${{ steps.tags.outputs.image }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          docker run --rm aquasec/trivy:0.76.2 image --exit-code 1 --severity CRITICAL,HIGH \
+            --ignore-unfixed "${IMAGE}@${DIGEST}"
