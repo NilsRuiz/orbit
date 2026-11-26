@@ -9,9 +9,20 @@ updates:
     groups:
       nats:
         patterns: ["github.com/nats-io/*"]
+  # Modules released in lockstep are grouped: bumping one alone leaves mismatched versions.
+  - package-ecosystem: gomod
+    directory: /operator
+    schedule: { interval: weekly }
+    groups:
+      nats:
+        patterns: ["github.com/nats-io/*"]
+      kubernetes:
+        patterns: ["k8s.io/*", "sigs.k8s.io/*"]
+      otel:
+        patterns: ["go.opentelemetry.io/*"]
   - package-ecosystem: terraform
     directories: ["/infra/terraform/envs/*", "/infra/terraform/bootstrap"]
     schedule: { interval: weekly }
   - package-ecosystem: docker
-    directory: /agent
+    directories: ["/agent", "/operator"]
     schedule: { interval: weekly }
