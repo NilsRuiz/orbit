@@ -170,12 +170,29 @@ func (n *NATS) Report(ctx context.Context, s reconcile.Status) error {
 	return err
 }
 
-// Heartbeat is fire-and-forget core NATS: only the latest one matters.
-func (n *NATS) Heartbeat(current string) error {
-	b, _ := json.Marshal(map[string]any{
-		"nodeId":  n.nodeID,
-		"current": current,
-		"time":    time.Now().UTC(),
-	})
+// Heartbeat is the liveness message the operator builds EdgeNode objects from (ADR-0007).
+// Its JSON form is a contract with the operator: see "Messages" in agent/README.md.
+type Heartbeat struct {
+	NodeID    string            `json:"nodeId"`
+	Current   string            `json:"current"`
+	Phase     string            `json:"phase"`
+	RolloutID string            `json:"rolloutId,omitempty"`
+	Labels    map[string]string `json:"labels"`
+	Time      time.Time         `json:"time"`
+}
+
+// Heartbeat publishes hb, fire-and-forget on core NATS: only the latest one matters, and a
+// heartbeat lost while the link is down is simply superseded by the next one. NodeID and
+// Time are filled in here.
+func (n *NATS) Heartbeat(hb Heartbeat) error {
+	hb.NodeID = n.nodeID
+	hb.Time = time.Now().UTC()
+	if hb.Labels == nil {
+		hb.Labels = map[string]string{} // encode {} rather than null
+	}
+	b, err := json.Marshal(hb)
+	if err != nil {
+		return fmt.Errorf("encode heartbeat: %w", err)
+	}
 	return n.nc.Publish(HeartbeatSubject(n.nodeID), b)
 }

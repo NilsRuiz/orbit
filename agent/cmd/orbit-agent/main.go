@@ -62,7 +62,7 @@ func run() error {
 		return err
 	}
 
-	go heartbeat(ctx, nc, rec, cfg.HeartbeatInterval, log)
+	go heartbeat(ctx, nc, rec, cfg.NodeLabels, cfg.HeartbeatInterval, log)
 
 	desired, err := nc.WatchDesired(ctx)
 	if err != nil {
@@ -77,7 +77,7 @@ func run() error {
 	return nil
 }
 
-func heartbeat(ctx context.Context, nc *transport.NATS, rec *reconcile.Reconciler, every time.Duration, log *slog.Logger) {
+func heartbeat(ctx context.Context, nc *transport.NATS, rec *reconcile.Reconciler, labels map[string]string, every time.Duration, log *slog.Logger) {
 	t := time.NewTicker(every)
 	defer t.Stop()
 	for {
@@ -85,7 +85,9 @@ func heartbeat(ctx context.Context, nc *transport.NATS, rec *reconcile.Reconcile
 		case <-ctx.Done():
 			return
 		case <-t.C:
-			if err := nc.Heartbeat(rec.State().Current); err != nil {
+			st := rec.State()
+			hb := transport.Heartbeat{Current: st.Current, Phase: string(st.Phase), RolloutID: st.RolloutID, Labels: labels}
+			if err := nc.Heartbeat(hb); err != nil {
 				log.Debug("heartbeat not sent", "err", err)
 			}
 		}
