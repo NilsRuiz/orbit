@@ -48,6 +48,19 @@ The agent publishes on the hub through its leaf node (ADR-0002). These payloads 
 contract with the operator, which decodes them in another module; tests pin the field
 names (`internal/transport/heartbeat_integration_test.go`).
 
+**Desired state** (read by the agent): key `<node>` in the `orbit-desired` KV bucket,
+written by the operator's Rollout controller (or `make desired` locally).
+
+```json
+{"version": "1.2.0", "rolloutId": "payload-g3", "previousVersion": "1.1.0"}
+```
+
+- The agent uses `version` and `rolloutId`, and ignores other fields. `previousVersion`
+  is the operator's revert trail: what the node goes back to if the rollout halts.
+- `rolloutId` is `<rollout>-g<generation>`. A value restored by a revert has
+  `<rollout>-g<generation>-revert`.
+- A deleted key is ignored: the node stays on its current version.
+
 **Heartbeat**: `orbit.edge.<node>.heartbeat`, core NATS, every `ORBIT_HEARTBEAT_INTERVAL`.
 
 ```json

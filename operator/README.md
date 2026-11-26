@@ -94,6 +94,13 @@ Pending ─► Progressing(wave i) ─► health gate ─┬─ pass ─► wave
    write the previous version back for the wave.
 5. Use `RequeueAfter` (not busy loops); make every step idempotent (KV revision checks).
 
+Desired states are written through `internal/desired`:
+- the writes are compare-and-swap on the KV revision, so a concurrent `make desired` is
+  detected, not overwritten;
+- each value records `previousVersion`, so a halted wave reverts from the bucket itself.
+  A revert writes `<rolloutId>-revert`, and never touches a value another writer has
+  changed since. See the format in [`agent/README.md`](../agent/README.md#messages).
+
 The rules are pure functions in `internal/rollout` (planned controller in #46):
 
 - **Waves** (`PlanWaves`): wave *i* ends with `ceil(percent × N / 100)` nodes, so a 10 %
