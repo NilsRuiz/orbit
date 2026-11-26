@@ -90,5 +90,5 @@ jobs:
           IMAGE: ${{ steps.tags.outputs.image }}
           DIGEST: ${{ steps.build.outputs.digest }}
         run: |
-          docker run --rm aquasec/trivy:latest image --exit-code 1 --severity CRITICAL,HIGH \
+          docker run --rm aquasec/trivy:0.76.2 image --exit-code 1 --severity CRITICAL,HIGH \
             --ignore-unfixed "${IMAGE}@${DIGEST}"

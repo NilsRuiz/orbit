@@ -1,6 +1,7 @@
 # Opens/updates a "release PR" from Conventional Commits on main (version bump +
-# CHANGELOG.md). Merging it creates the tag (e.g. agent-v0.2.0) and the GitHub release,
-# which triggers the versioned image build in agent.yml.
+# CHANGELOG.md), one per component in release-please-config.json. Merging it creates the
+# tag (e.g. agent-v0.2.0, operator-v0.1.0) and the GitHub release, which triggers the
+# versioned image build in agent.yml or operator.yml.
 name: release-please
 
 on:
