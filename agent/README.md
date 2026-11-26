@@ -97,7 +97,9 @@ JSON on stdout (`log/slog`). NATS connection events worth alerting on:
 - [ ] **Status store-and-forward**: today a status published while the hub link is down is
       lost (heartbeats re-sync the current version). Fix: enable JetStream on the leaf node
       with its own domain and *source* a local status stream into the hub's `ORBIT_STATUS`.
-- [ ] **K3s payload driver**: patch the local Flux `OCIRepository` tag, check Deployment readiness.
+- [ ] **K3s payload driver** (#86): set the local Flux `OCIRepository` tag, check that the
+      revision is applied and the Deployment rolled out
+      ([ADR-0009](../docs/adr/0009-payload-driver-flux-oci.md)).
 - [ ] **Metrics**: Prometheus endpoint (`orbit_agent_phase`, `orbit_agent_rollbacks_total`).
 - [ ] Verify KV watch recovery after long link cuts (chaos test, phase 5). A clean cut
       (connections closed) is covered by `TestConvergenceAfterLeafLinkCut`. Still open: a
