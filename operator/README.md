@@ -33,11 +33,38 @@ versions pinned in the `Makefile`.
 
 ## Controllers
 
-**EdgeNode controller** — subscribes to `orbit.edge.*.heartbeat` and the `ORBIT_STATUS`
-stream; creates/updates `EdgeNode` objects; marks a node `Unreachable` after
-`2 × expected contact interval` without heartbeat (*unreachable ≠ failed*: a satellite out
-of range is normal). Nodes register themselves: an unknown heartbeat creates the
-`EdgeNode`, with the agent's `orbit.io/*` labels ([ADR-0007](../docs/adr/0007-edgenode-registration-from-heartbeats.md)).
+**EdgeNode ingestion and controller** ([ADR-0007](../docs/adr/0007-edgenode-registration-from-heartbeats.md)):
+
+- `internal/ingest` reads agent messages, in the **leader replica only**:
+  - heartbeats (`orbit.edge.*.heartbeat`, core NATS) create unknown `EdgeNode`s, make
+    their `orbit.io/*` labels follow the agent (other labels are left to humans), and
+    refresh `currentVersion`, `phase`, `rolloutId` and `lastSeen`;
+  - status events (`ORBIT_STATUS`) through the durable consumer `orbit-operator`: a
+    restarted operator resumes where it stopped. An event is applied once, if its stream
+    sequence is above `status.observedStatusSeq`, and only if it was stored after
+    `lastSeen` (otherwise the last heartbeat already reported a newer state).
+  - The payloads are documented in [`agent/README.md`](../agent/README.md#messages).
+- `internal/controller` marks a node `Unreachable` after `2 × spec.contactInterval` of
+  silence, with `RequeueAfter`. *Unreachable ≠ failed*: a satellite out of range is normal.
+- Write budget: `lastSeen` (hub clock) is written at most once a minute, or every
+  `contactInterval / 2` if shorter; other fields when they change. That is about one
+  write per node per minute in steady state.
+- Rules (reachability, label ownership, budget) are pure functions in `internal/edgenode`.
+
+Kubernetes events on `EdgeNode`s (`kubectl get events.events.k8s.io`):
+
+| Reason | Type | When |
+|---|---|---|
+| `Registered` | Normal | First heartbeat of an unknown node |
+| `LabelsChanged` | Normal | The agent reported different `orbit.io/*` labels: they decide which fleets, and so which rollouts, a node gets |
+| `LabelsRejected` | Warning | Reported labels outside `orbit.io/` or invalid, ignored |
+| `ContactLost` / `ContactRestored` | Normal | Reachability changed |
+| `RolledBack` | Warning | The agent rolled back (status event), with its message |
+
+Flags: `-nats-url` (default `nats://127.0.0.1:4222`, the hub; it reconnects forever and
+may start before NATS), `-nats-creds`, `-log-level`. Logs are JSON (`log/slog`): messages
+that cannot name a valid node, or whose payload `nodeId` differs from the subject, are
+dropped with a `dropping heartbeat` / `dropping status event` warning.
 
 **Rollout controller** — reconcile loop:
 

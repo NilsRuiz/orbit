@@ -7,6 +7,7 @@ import (
 	"os"
 
 	"github.com/go-logr/logr"
+	"github.com/nats-io/nats.go"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
@@ -22,6 +23,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
 	fleetv1alpha1 "github.com/NilsRuiz/orbit/operator/api/v1alpha1"
+	"github.com/NilsRuiz/orbit/operator/internal/controller"
+	"github.com/NilsRuiz/orbit/operator/internal/ingest"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -67,13 +70,18 @@ func main() {
 	flag.StringVar(&metricsCertKey, "metrics-cert-key", "tls.key", "The name of the metrics server key file.")
 	flag.BoolVar(&enableHTTP2, "enable-http2", false,
 		"If set, HTTP/2 will be enabled for the metrics and webhook servers")
+	var natsURL, natsCreds string
+	flag.StringVar(&natsURL, "nats-url", "nats://127.0.0.1:4222",
+		"Hub NATS server, where agents publish heartbeats and status events.")
+	flag.StringVar(&natsCreds, "nats-creds", "", "NATS credentials file (optional).")
 	var logLevel slog.Level
 	flag.TextVar(&logLevel, "log-level", slog.LevelInfo, "Log level: debug, info, warn or error.")
 	flag.Parse()
 
 	// Same convention as the agent: log/slog, JSON on stdout. controller-runtime logs
 	// through logr, which forwards to the slog handler.
-	ctrl.SetLogger(logr.FromSlogHandler(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: logLevel})))
+	slogger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: logLevel}))
+	ctrl.SetLogger(logr.FromSlogHandler(slogger.Handler()))
 
 	// if the enable-http2 flag is false (the default), http/2 should be disabled
 	// due to its vulnerabilities. More specifically, disabling http/2 will
@@ -167,6 +175,29 @@ func main() {
 		os.Exit(1)
 	}
 
+	nc, err := connectNATS(natsURL, natsCreds, slogger)
+	if err != nil {
+		setupLog.Error(err, "Failed to connect to NATS", "url", natsURL)
+		os.Exit(1)
+	}
+	defer nc.Close()
+	// Leader-only (NeedLeaderElection): one replica applies agent messages.
+	if err := mgr.Add(&ingest.Ingester{
+		NC:       nc,
+		Client:   mgr.GetClient(),
+		Recorder: mgr.GetEventRecorder("orbit-operator"),
+		Log:      slogger.With("component", "ingest"),
+	}); err != nil {
+		setupLog.Error(err, "Failed to add the ingester")
+		os.Exit(1)
+	}
+	if err := (&controller.EdgeNodeReconciler{
+		Client:   mgr.GetClient(),
+		Recorder: mgr.GetEventRecorder("orbit-operator"),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "Failed to create controller", "controller", "EdgeNode")
+		os.Exit(1)
+	}
 	// +kubebuilder:scaffold:builder
 
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
@@ -181,6 +212,38 @@ func main() {
 	setupLog.Info("Starting manager")
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
 		setupLog.Error(err, "Failed to run manager")
+		nc.Close()
 		os.Exit(1)
 	}
+}
+
+// connectNATS connects to the hub and keeps reconnecting forever: the operator must
+// outlive NATS restarts. The first connection is retried too, so start-up order does not
+// matter.
+func connectNATS(url, creds string, log *slog.Logger) (*nats.Conn, error) {
+	opts := []nats.Option{
+		nats.Name("orbit-operator"),
+		nats.MaxReconnects(-1),
+		nats.RetryOnFailedConnect(true),
+		nats.ConnectHandler(func(c *nats.Conn) {
+			log.Info("nats connected", "url", c.ConnectedUrlRedacted())
+		}),
+		nats.DisconnectErrHandler(func(_ *nats.Conn, err error) {
+			log.Warn("nats disconnected", "err", err)
+		}),
+		nats.ReconnectHandler(func(c *nats.Conn) {
+			log.Info("nats reconnected", "url", c.ConnectedUrlRedacted())
+		}),
+		nats.ErrorHandler(func(_ *nats.Conn, sub *nats.Subscription, err error) {
+			if sub != nil {
+				log.Warn("nats async error", "err", err, "subject", sub.Subject)
+				return
+			}
+			log.Warn("nats async error", "err", err)
+		}),
+	}
+	if creds != "" {
+		opts = append(opts, nats.UserCredentials(creds))
+	}
+	return nats.Connect(url, opts...)
 }

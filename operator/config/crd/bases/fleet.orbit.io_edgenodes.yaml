@@ -133,10 +133,17 @@ spec:
                   known-good version).
                 type: string
               lastSeen:
-                description: lastSeen is the time of the last heartbeat or status
-                  event.
+                description: |-
+                  lastSeen is when the hub last heard from the node (hub clock), written at most once
+                  a minute.
                 format: date-time
                 type: string
+              observedStatusSeq:
+                description: |-
+                  observedStatusSeq is the ORBIT_STATUS stream sequence of the last status event
+                  applied. Older or replayed events are ignored (ADR-0007).
+                format: int64
+                type: integer
               phase:
                 description: phase is the agent's state machine phase.
                 enum:
