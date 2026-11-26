@@ -109,8 +109,13 @@ demo-release: ## Release a version to the demo fleet: make demo-release VERSION=
 	@test -n "$(VERSION)" || (echo "usage: make demo-release VERSION=1.2.0"; exit 1)
 	$(HUB_KUBECTL) patch rollout payload --type merge -p '{"spec":{"targetVersion":"$(VERSION)"}}'
 
-demo-watch: ## Watch nodes, fleets and rollouts
-	$(HUB_KUBECTL) get edgenodes,fleets,rollouts -o wide -w
+demo-watch: ## Watch nodes, fleets and rollouts (refreshed every 2 s, Ctrl-C to stop)
+	@# kubectl get -w only watches a single resource type: redraw all three instead.
+	@while :; do \
+	  out=$$($(HUB_KUBECTL) get edgenodes,fleets,rollouts -o wide 2>&1); \
+	  printf '\033[H\033[2J%s  (every 2 s, Ctrl-C to stop)\n\n%s\n' "$$(date +%T)" "$$out"; \
+	  sleep 2; \
+	done
 
 ##@ Infrastructure
 tf-fmt: ## Format Terraform
