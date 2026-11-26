@@ -158,9 +158,23 @@ spec:
                 - Reachable
                 - Unreachable
                 type: string
+              reachableSince:
+                description: |-
+                  reachableSince is when the current (or last) contact period started: the first
+                  contact, or the return from Unreachable. A rollout's health gate timeout for this
+                  node counts from it, so a node back in range gets time to apply.
+                format: date-time
+                type: string
               rolloutId:
                 description: rolloutId is the rollout that produced the node's current
                   desired state.
+                type: string
+              rolloutIdSince:
+                description: |-
+                  rolloutIdSince is when the hub saw the node adopt its current rolloutId, that is
+                  start applying that run's version. A rollout's health gate timeout for this node
+                  counts from it at the latest.
+                format: date-time
                 type: string
             type: object
         type: object

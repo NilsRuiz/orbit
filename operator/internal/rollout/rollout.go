@@ -7,6 +7,7 @@ package rollout
 import (
 	"cmp"
 	"hash/fnv"
+	"maps"
 	"slices"
 	"time"
 
@@ -73,7 +74,39 @@ const (
 	// Pending: unreachable (out of range) and not known to have succeeded or failed.
 	// Not a failure.
 	Pending Result = "Pending"
+	// Stuck: InProgress past its Deadline, though it acknowledged this run
+	// (AtDeadline). Counts as failed. The controller assigns it; Classify does not know
+	// the time.
+	Stuck Result = "Stuck"
 )
+
+// Deadline is when an InProgress node becomes Stuck: the gate timeout counted from the
+// latest of starts — the wave start, the node's return in range (EdgeNode
+// status.reachableSince), the moment it acknowledged the run (status.rolloutIdSince).
+// A node that only starts applying late, after hours out of range or a short link cut,
+// gets the full timeout from then.
+func Deadline(timeout time.Duration, starts ...time.Time) time.Time {
+	var latest time.Time
+	for _, t := range starts {
+		if t.After(latest) {
+			latest = t
+		}
+	}
+	return latest.Add(timeout)
+}
+
+// AtDeadline tells what an InProgress node past its Deadline is. Stuck if it
+// acknowledged this run: the agent adopts the rolloutId as soon as it starts applying, so
+// it received the version and does not converge. Otherwise it never received the desired
+// state: it left range before being marked Unreachable, which takes 2 × contactInterval,
+// so it is Pending rather than failing. No clock involved: lastSeen is written at most
+// once a minute and at second precision, too coarse to tell.
+func AtDeadline(s fleetv1alpha1.EdgeNodeStatus, rolloutID string) Result {
+	if s.RolloutID == rolloutID {
+		return Stuck
+	}
+	return Pending
+}
 
 // Classify tells where a node stands in the rollout rolloutID to version target. A known
 // outcome (success or failure) stands even when the node is out of range now.
@@ -81,7 +114,10 @@ func Classify(s fleetv1alpha1.EdgeNodeStatus, target, rolloutID string) Result {
 	switch {
 	case s.Phase == "rolled-back" && s.RolloutID == rolloutID:
 		return Failed
-	case s.Phase == "idle" && s.CurrentVersion == target:
+	case s.CurrentVersion == target && (s.Phase == "idle" || s.Phase == "rolled-back"):
+		// rolled-back: the node failed an earlier run and went back to this run's
+		// target. The agent ignores a desired state equal to its current version, so it
+		// stays rolled-back while running the target.
 		return Succeeded
 	case s.Reachability != fleetv1alpha1.Reachable:
 		return Pending
@@ -105,24 +141,24 @@ const (
 
 // Gate is the verdict and the counts it was based on.
 type Gate struct {
-	Decision                               Decision
-	Succeeded, Failed, InProgress, Pending int32
-	// TimedOut: reachable nodes still in progress at the timeout were counted as failed.
+	Decision                                      Decision
+	Succeeded, Failed, InProgress, Pending, Stuck int32
+	// TimedOut: some nodes were Stuck, and counted as failed.
 	TimedOut bool
 }
 
 // EvaluateGate applies the health gate to the results of every node of the waves started
-// so far, elapsed after the current wave started.
+// so far.
 //
 //   - Pending (unreachable) nodes never count: out of range is not a failure.
+//   - Stuck nodes (past their Deadline) count as failed.
 //   - Halt as soon as failed / (succeeded + failed + inProgress) > maxFailurePercent: the
 //     gate cannot pass even if every node in progress succeeds.
 //   - Promote once no reachable node is in progress, if failed / (succeeded + failed) <=
 //     maxFailurePercent.
-//   - At the timeout, reachable nodes still in progress are stuck and count as failed.
-//   - With no result at all but pending nodes, wait, even after the timeout: promoting
-//     would be blind, halting would treat being out of range as failing.
-func EvaluateGate(results []Result, maxFailurePercent int32, elapsed, timeout time.Duration) Gate {
+//   - With no result at all but pending nodes, wait: promoting would be blind, halting
+//     would treat being out of range as failing.
+func EvaluateGate(results []Result, maxFailurePercent int32) Gate {
 	var g Gate
 	for _, r := range results {
 		switch r {
@@ -134,26 +170,21 @@ func EvaluateGate(results []Result, maxFailurePercent int32, elapsed, timeout ti
 			g.InProgress++
 		case Pending:
 			g.Pending++
+		case Stuck:
+			g.Stuck++
 		}
 	}
+	g.TimedOut = g.Stuck > 0
 	tooMany := func(failed, total int32) bool {
 		return int64(failed)*100 > int64(maxFailurePercent)*int64(total)
 	}
 
-	failed, inProgress := g.Failed, g.InProgress
-	if tooMany(failed, g.Succeeded+failed+inProgress) {
-		g.Decision = Halt
-		return g
-	}
-	if inProgress > 0 {
-		if elapsed < timeout {
-			g.Decision = Wait
-			return g
-		}
-		g.TimedOut = true
-		failed += inProgress
-	}
+	failed := g.Failed + g.Stuck
 	switch {
+	case tooMany(failed, g.Succeeded+failed+g.InProgress):
+		g.Decision = Halt
+	case g.InProgress > 0:
+		g.Decision = Wait
 	case g.Succeeded+failed == 0 && g.Pending > 0:
 		g.Decision = Wait
 	case tooMany(failed, g.Succeeded+failed):
@@ -162,4 +193,13 @@ func EvaluateGate(results []Result, maxFailurePercent int32, elapsed, timeout ti
 		g.Decision = Promote
 	}
 	return g
+}
+
+// RelevantNodeChange reports whether an EdgeNode update can move a rollout: membership
+// (labels) or anything Classify reads. lastSeen and sequence writes are ignored.
+func RelevantNodeChange(old, updated *fleetv1alpha1.EdgeNode) bool {
+	o, u := old.Status, updated.Status
+	return !maps.Equal(old.Labels, updated.Labels) ||
+		o.Reachability != u.Reachability || o.Phase != u.Phase ||
+		o.CurrentVersion != u.CurrentVersion || o.RolloutID != u.RolloutID
 }

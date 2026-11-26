@@ -270,6 +270,16 @@ func (in *Ingester) writeStatus(ctx context.Context, en *fleetv1alpha1.EdgeNode,
 		next.LastSeen = &metav1.Time{Time: seen}
 	}
 	next.Reachability, _ = edgenode.Reachability(lastSeenOf(next), ci, in.Now())
+	if next.Reachability == fleetv1alpha1.Reachable && prev.Reachability != fleetv1alpha1.Reachable {
+		next.ReachableSince = &metav1.Time{Time: seen} // a new contact period starts
+	}
+	if next.RolloutID != prev.RolloutID {
+		// The node adopted another run: it starts applying that run's version now.
+		next.RolloutIDSince = nil
+		if next.RolloutID != "" {
+			next.RolloutIDSince = &metav1.Time{Time: seen}
+		}
+	}
 
 	changed := !equality.Semantic.DeepEqual(withLastSeen(prev, nil), withLastSeen(*next, nil))
 	if !changed && !edgenode.ShouldWriteLastSeen(prevSeen, seen, ci) {
@@ -370,8 +380,12 @@ func (in *Ingester) applyStatus(ctx context.Context, id string, st Status, seq i
 		}
 		if fresh && st.Phase == "rolled-back" {
 			in.Log.Warn("edge node rolled back", "node", id, "rolloutId", st.RolloutID, "target", st.Target, "message", st.Message)
+			from := ""
+			if st.Target != "" { // the agent does not always report the failed version
+				from = " from " + st.Target
+			}
 			in.Recorder.Eventf(en, nil, corev1.EventTypeWarning, edgenode.ReasonRolledBack, "Rollback",
-				"Rolled back from %s to %s (rollout %q): %s", st.Target, st.Current, st.RolloutID, st.Message)
+				"Rolled back%s to %s (rollout %q): %s", from, st.Current, st.RolloutID, st.Message)
 		}
 		return nil
 	})

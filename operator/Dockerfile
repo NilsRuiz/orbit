@@ -2,7 +2,9 @@
 # Override BASE_IMAGE to build from another registry, e.g. docker.io/library/golang:1.26
 # Keep in sync with the toolchain directive in go.mod.
 ARG BASE_IMAGE=golang:1.26.10
-FROM ${BASE_IMAGE} AS builder
+# Build on the runner's platform and cross-compile (pure Go): an arm64 image does not run
+# the compiler under QEMU emulation. Same as agent/Dockerfile.
+FROM --platform=$BUILDPLATFORM ${BASE_IMAGE} AS builder
 ARG TARGETOS
 ARG TARGETARCH
 
@@ -22,7 +24,7 @@ COPY . .
 # was called. For example, if we call make docker-build in a local env which has the Apple Silicon M1 SO
 # the docker BUILDPLATFORM arg will be linux/arm64 when for Apple x86 it will be linux/amd64. Therefore,
 # by leaving it empty we can ensure that the container and binary shipped on it will have the same platform.
-RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -a -o manager cmd/main.go
+RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -trimpath -ldflags="-s -w" -o manager cmd/main.go
 
 # Use distroless as minimal base image to package the manager binary
 # Refer to https://github.com/GoogleContainerTools/distroless for more details

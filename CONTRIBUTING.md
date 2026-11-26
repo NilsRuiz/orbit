@@ -83,6 +83,18 @@ deleted or weakened to get a green build; flaky tests are fixed or quarantined w
 `main`, opens a *release PR* with the version bump and `CHANGELOG.md`; merging it creates the
 tag and GitHub release, which triggers the image build for that version.
 
+Each component is released on its own, from the commits that touch its directory
+(`release-please-config.json`):
+
+| Component | Tag | Image (`ghcr.io/<owner>/…`) | Workflow |
+|---|---|---|---|
+| `agent/` | `agent-vX.Y.Z` | `orbit-agent` | `agent.yml` |
+| `operator/` | `operator-vX.Y.Z` | `orbit-operator` | `operator.yml` |
+
+Every push to `main` also publishes `:main` and `:sha-<commit>`. Images are multi-arch
+(amd64, arm64), with provenance and an SBOM, signed with cosign (keyless) and scanned with
+Trivy.
+
 release-please acts as a **GitHub App** (`.github/workflows/release-please.yml`), not with
 `GITHUB_TOKEN`. Tags created with `GITHUB_TOKEN` do not trigger other workflows, and the
 repository does not allow `GITHUB_TOKEN` to create pull requests. One-time setup:

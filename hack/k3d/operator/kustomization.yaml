@@ -1,0 +1,25 @@
+# The operator on the local k3d hub cluster, connected to the compose fleet's hub NATS.
+# Applied by `make hub-up`; the image is built locally and imported into k3d.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../../operator/config/default
+images:
+  - name: controller
+    newName: orbit-operator
+    newTag: dev
+patches:
+  - target:
+      kind: Deployment
+      name: controller-manager
+    patch: |-
+      # The hub NATS port is published on the Docker host by docker compose: reach it
+      # through the host rather than a shared Docker network, whose container names
+      # CoreDNS does not resolve for pods.
+      - op: add
+        path: /spec/template/spec/containers/0/args/-
+        value: --nats-url=nats://host.k3d.internal:4222
+      # Imported with `k3d image import`: never pulled from a registry.
+      - op: add
+        path: /spec/template/spec/containers/0/imagePullPolicy
+        value: Never

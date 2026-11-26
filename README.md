@@ -6,6 +6,7 @@
 
 ![status](https://img.shields.io/badge/status-WIP-orange)
 [![agent](https://github.com/NilsRuiz/orbit/actions/workflows/agent.yml/badge.svg?branch=main)](https://github.com/NilsRuiz/orbit/actions/workflows/agent.yml)
+[![operator](https://github.com/NilsRuiz/orbit/actions/workflows/operator.yml/badge.svg?branch=main)](https://github.com/NilsRuiz/orbit/actions/workflows/operator.yml)
 
 ## Why this project
 
@@ -79,14 +80,60 @@ Rollout flow:
 
 ## Quick start (local, free)
 
-Requirements: Docker, Go ≥ 1.26, `make`. Agent development notes:
-[agent/README.md](agent/README.md).
+Requirements: Docker, Go ≥ 1.26, `make`, plus [k3d](https://k3d.io) and `kubectl` for the
+operator. Component notes: [agent/README.md](agent/README.md),
+[operator/README.md](operator/README.md).
+
+### A rollout across the fleet
+
+The operator runs in a local k3d cluster, the "hub". The satellites are docker compose
+containers: a NATS leaf node and an agent each. sat-1 and sat-2 are in constellation
+`alpha`, and sat-3 is in `beta`.
 
 ```bash
 make dev-up            # hub NATS + 3 edge leaf nodes + 3 agents (docker compose)
+make hub-up            # k3d cluster + the operator (built locally), about 1 min the first time
+make demo-watch        # in a second terminal: EdgeNodes, Fleets, Rollouts, live
+
+make demo-apply        # Fleet constellation-alpha (sat-1, sat-2) + Rollout payload → 1.1.0
+```
+
+The satellites register themselves from their heartbeats (`kubectl --context
+k3d-orbit-hub get edgenodes --show-labels`). The rollout updates one canary, soaks for
+20 s, then updates the rest of the fleet. sat-3 is not in the fleet and stays on 1.0.0.
+
+```bash
+make demo-release VERSION=6.6.6     # a bad version: it fails on the canary
+```
+
+The canary applies 6.6.6, is "not healthy within 15s", and rolls back by itself (dead
+man's switch). The operator then halts the rollout at wave 1 and reverts the canary's
+desired state; the other satellite is never touched.
+
+```bash
+kubectl --context k3d-orbit-hub get rollout payload    # PHASE Halted, FAILED 1
+kubectl --context k3d-orbit-hub get events.events.k8s.io --field-selector reason=Halted
+make demo-release VERSION=1.2.0     # a fixed version: a new run, from the first wave
+```
+
+Satellites out of range are pending, not failed:
+
+```bash
+make link-cut NODE=sat-1                 # cut a satellite's link
+make demo-release VERSION=1.3.0          # its update waits; the gate does not fail on it
+make link-restore NODE=sat-1             # back in range → applies, and the rollout completes
+make hub-down && make dev-down
+```
+
+### The agent alone
+
+Without the operator, `make desired` writes a node's desired state directly:
+
+```bash
+make dev-up
 make logs              # in a second terminal: follow the agents (blocks until Ctrl-C)
 
-make desired NODE=sat-1 VERSION=1.1.0     # simulate the operator: set a target version
+make desired NODE=sat-1 VERSION=1.1.0     # set a target version
 
 make link-cut NODE=sat-2                  # clean cut: satellite goes out of range
 make desired NODE=sat-2 VERSION=1.1.0     # update queued while offline: nothing happens
@@ -105,7 +152,7 @@ make dev-down
 
 - [x] Repository skeleton, ADRs, CI scaffolding
 - [x] **Phase 1** — agent: desired-state watch, persisted A/B state, dead man's switch
-- [ ] **Phase 2** — operator: `EdgeNode` registration from heartbeats, `Rollout` waves
+- [x] **Phase 2** — operator: `EdgeNode` registration from heartbeats, `Rollout` waves
 - [ ] **Phase 3** — GCP: Terraform hub + edge VMs, Flux bootstrap, OIDC from CI
 - [ ] **Phase 4** — SRE: SLOs (Sloth), alerting, Grafana dashboards
 - [ ] **Phase 5** — Chaos: link cuts / latency / bandwidth, a written postmortem

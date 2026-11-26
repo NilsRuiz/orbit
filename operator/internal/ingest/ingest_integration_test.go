@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"maps"
 	"os"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -251,6 +252,12 @@ func TestHeartbeatRegistersNode(t *testing.T) {
 	if !s.LastSeen.Time.Equal(t0) {
 		t.Errorf("lastSeen = %v, want %v", s.LastSeen, t0)
 	}
+	if s.ReachableSince == nil || !s.ReachableSince.Time.Equal(t0) {
+		t.Errorf("reachableSince = %v, want %v (first contact)", s.ReachableSince, t0)
+	}
+	if s.RolloutIDSince == nil || !s.RolloutIDSince.Time.Equal(t0) {
+		t.Errorf("rolloutIdSince = %v, want %v (rollout id first reported)", s.RolloutIDSince, t0)
+	}
 	if evs := drainEvents(rec); !hasEvent(evs, "Normal Registered") {
 		t.Errorf("events = %q, want Registered", evs)
 	}
@@ -327,12 +334,25 @@ func TestHeartbeatWriteBudget(t *testing.T) {
 		t.Errorf("lastSeen = %v, want %v", en.Status.LastSeen, t0.Add(time.Minute))
 	}
 
-	// Any other change is written at once, with a fresh lastSeen.
+	// Any other change is written at once, with a fresh lastSeen. A new rollout id
+	// records when the node adopted it.
 	clk.set(t0.Add(70 * time.Second))
-	heartbeat(t, h, name, Heartbeat{NodeID: name, Current: "1.0.0", Phase: "applying"})
+	heartbeat(t, h, name, Heartbeat{NodeID: name, Current: "1.0.0", Phase: "applying", RolloutID: "r-g1"})
 	barrier(t, h)
-	if en, _ = get(t, name); en.Status.Phase != "applying" || !en.Status.LastSeen.Time.Equal(t0.Add(70*time.Second)) {
+	en, _ = get(t, name)
+	if en.Status.Phase != "applying" || !en.Status.LastSeen.Time.Equal(t0.Add(70*time.Second)) {
 		t.Errorf("status = %+v", en.Status)
+	}
+	if en.Status.RolloutIDSince == nil || !en.Status.RolloutIDSince.Time.Equal(t0.Add(70*time.Second)) {
+		t.Errorf("rolloutIdSince = %v, want %v", en.Status.RolloutIDSince, t0.Add(70*time.Second))
+	}
+
+	// The same id later does not move it.
+	clk.set(t0.Add(3 * time.Minute))
+	heartbeat(t, h, name, Heartbeat{NodeID: name, Current: "1.1.0", Phase: "idle", RolloutID: "r-g1"})
+	barrier(t, h)
+	if en, _ = get(t, name); !en.Status.RolloutIDSince.Time.Equal(t0.Add(70 * time.Second)) {
+		t.Errorf("rolloutIdSince moved to %v on an unchanged rollout id", en.Status.RolloutIDSince)
 	}
 }
 
@@ -360,6 +380,9 @@ func TestHeartbeatRestoresReachability(t *testing.T) {
 	if evs := drainEvents(rec); !hasEvent(evs, "Normal ContactRestored") {
 		t.Errorf("events = %q, want ContactRestored", evs)
 	}
+	if en, _ := get(t, name); en.Status.ReachableSince == nil || !en.Status.ReachableSince.Time.Equal(t0) {
+		t.Errorf("reachableSince = %v, want %v (back in contact)", en.Status.ReachableSince, t0)
+	}
 }
 
 func TestStatusEvents(t *testing.T) {
@@ -381,9 +404,11 @@ func TestStatusEvents(t *testing.T) {
 	if en.Status.Phase != "rolled-back" || en.Status.RolloutID != "r-1" {
 		t.Errorf("status = %+v", en.Status)
 	}
+	// The agent reports a rollback with no target (agent known gap): the note must not
+	// read "from  to".
 	evs := drainEvents(rec)
-	if !hasEvent(evs, "Warning RolledBack") {
-		t.Errorf("events = %q, want RolledBack", evs)
+	if want := `Warning RolledBack Rolled back to 1.0.0 (rollout "r-1"): unhealthy`; !slices.Contains(evs, want) {
+		t.Errorf("events = %q, want %q", evs, want)
 	}
 }
 

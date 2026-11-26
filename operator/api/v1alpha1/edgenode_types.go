@@ -36,6 +36,12 @@ type EdgeNodeStatus struct {
 	// +optional
 	LastSeen *metav1.Time `json:"lastSeen,omitempty"`
 
+	// reachableSince is when the current (or last) contact period started: the first
+	// contact, or the return from Unreachable. A rollout's health gate timeout for this
+	// node counts from it, so a node back in range gets time to apply.
+	// +optional
+	ReachableSince *metav1.Time `json:"reachableSince,omitempty"`
+
 	// currentVersion is the version the agent runs (its last known-good version).
 	// +optional
 	CurrentVersion string `json:"currentVersion,omitempty"`
@@ -48,6 +54,12 @@ type EdgeNodeStatus struct {
 	// rolloutId is the rollout that produced the node's current desired state.
 	// +optional
 	RolloutID string `json:"rolloutId,omitempty"`
+
+	// rolloutIdSince is when the hub saw the node adopt its current rolloutId, that is
+	// start applying that run's version. A rollout's health gate timeout for this node
+	// counts from it at the latest.
+	// +optional
+	RolloutIDSince *metav1.Time `json:"rolloutIdSince,omitempty"`
 
 	// observedStatusSeq is the ORBIT_STATUS stream sequence of the last status event
 	// applied. Older or replayed events are ignored (ADR-0007).
