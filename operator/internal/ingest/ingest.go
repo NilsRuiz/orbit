@@ -373,8 +373,12 @@ func (in *Ingester) applyStatus(ctx context.Context, id string, st Status, seq i
 		}
 		if fresh && st.Phase == "rolled-back" {
 			in.Log.Warn("edge node rolled back", "node", id, "rolloutId", st.RolloutID, "target", st.Target, "message", st.Message)
+			from := ""
+			if st.Target != "" { // the agent does not always report the failed version
+				from = " from " + st.Target
+			}
 			in.Recorder.Eventf(en, nil, corev1.EventTypeWarning, edgenode.ReasonRolledBack, "Rollback",
-				"Rolled back from %s to %s (rollout %q): %s", st.Target, st.Current, st.RolloutID, st.Message)
+				"Rolled back%s to %s (rollout %q): %s", from, st.Current, st.RolloutID, st.Message)
 		}
 		return nil
 	})

@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"maps"
 	"os"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -387,9 +388,11 @@ func TestStatusEvents(t *testing.T) {
 	if en.Status.Phase != "rolled-back" || en.Status.RolloutID != "r-1" {
 		t.Errorf("status = %+v", en.Status)
 	}
+	// The agent reports a rollback with no target (agent known gap): the note must not
+	// read "from  to".
 	evs := drainEvents(rec)
-	if !hasEvent(evs, "Warning RolledBack") {
-		t.Errorf("events = %q, want RolledBack", evs)
+	if want := `Warning RolledBack Rolled back to 1.0.0 (rollout "r-1"): unhealthy`; !slices.Contains(evs, want) {
+		t.Errorf("events = %q, want %q", evs, want)
 	}
 }
 
