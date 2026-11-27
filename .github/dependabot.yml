@@ -9,6 +9,8 @@ updates:
     groups:
       nats:
         patterns: ["github.com/nats-io/*"]
+      kubernetes:
+        patterns: ["k8s.io/*", "sigs.k8s.io/*"]
   # Modules released in lockstep are grouped: bumping one alone leaves mismatched versions.
   - package-ecosystem: gomod
     directory: /operator

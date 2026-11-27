@@ -1,10 +1,10 @@
 // Package payload drives the workload the node runs.
 //
-// Sim is a simulator used in local dev (docker compose): it "applies" instantly and
-// reports any version listed in OrbitBadVersions as unhealthy, so rollbacks can be demoed.
-//
-// TODO(phase 3): add a K3s implementation that patches the local Flux OCIRepository tag
-// (client-go, in-cluster config) and checks the payload Deployment's readiness.
+//   - Sim is a simulator for local dev (docker compose): it "applies" after a delay and
+//     reports any version listed in ORBIT_SIM_BAD_VERSIONS as unhealthy, so rollbacks can
+//     be demoed.
+//   - K3s deploys versions on the node's cluster through a Flux OCIRepository tag
+//     (ADR-0009).
 package payload
 
 import (

@@ -87,6 +87,7 @@ func TestFromEnvRejectsInvalidSettings(t *testing.T) {
 	}{
 		{name: "invalid node id", env: map[string]string{"ORBIT_NODE_ID": "sat.1"}, wantErr: "ORBIT_NODE_ID"},
 		{name: "invalid labels", env: map[string]string{"ORBIT_NODE_ID": "sat-1", "ORBIT_NODE_LABELS": "team=a"}, wantErr: "ORBIT_NODE_LABELS"},
+		{name: "unknown payload driver", env: map[string]string{"ORBIT_NODE_ID": "sat-1", "ORBIT_PAYLOAD": "docker"}, wantErr: "ORBIT_PAYLOAD"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -107,6 +108,32 @@ func TestFromEnvRejectsInvalidSettings(t *testing.T) {
 		}
 		if c.NodeLabels["orbit.io/constellation"] != "alpha" {
 			t.Fatalf("NodeLabels = %v", c.NodeLabels)
+		}
+	})
+}
+
+func TestFromEnvPayload(t *testing.T) {
+	t.Run("defaults to the simulator", func(t *testing.T) {
+		t.Setenv("ORBIT_NODE_ID", "sat-1")
+		c, err := FromEnv()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if c.Payload != PayloadSim || c.PayloadNamespace != "payload" || c.PayloadName != "payload" {
+			t.Fatalf("payload = %q %q/%q, want sim payload/payload", c.Payload, c.PayloadNamespace, c.PayloadName)
+		}
+	})
+	t.Run("k3s driver with its objects", func(t *testing.T) {
+		t.Setenv("ORBIT_NODE_ID", "sat-1")
+		t.Setenv("ORBIT_PAYLOAD", "k3s")
+		t.Setenv("ORBIT_PAYLOAD_NAMESPACE", "workloads")
+		t.Setenv("ORBIT_PAYLOAD_NAME", "camera")
+		c, err := FromEnv()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if c.Payload != PayloadK3s || c.PayloadNamespace != "workloads" || c.PayloadName != "camera" {
+			t.Fatalf("payload = %q %q/%q, want k3s workloads/camera", c.Payload, c.PayloadNamespace, c.PayloadName)
 		}
 	})
 }

@@ -4,6 +4,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"os"
 	"os/signal"
@@ -50,16 +51,26 @@ func run() error {
 	}
 	defer nc.Close()
 
-	sim := payload.Sim{ApplyDelay: 2 * time.Second, BadVersions: cfg.SimBadVersions}
+	drv, err := newDriver(cfg, log)
+	if err != nil {
+		return err
+	}
 	rec := reconcile.New(reconcile.Config{
 		NodeID:         cfg.NodeID,
 		VerifyTimeout:  cfg.VerifyTimeout,
 		VerifyInterval: time.Second,
-	}, st, store, sim, sim, nc, log)
+	}, st, store, drv, drv, nc, log)
 
 	// Finish any transition interrupted by a crash/reboot before accepting new work.
 	if err := rec.Resume(ctx); err != nil {
 		return err
+	}
+	// Re-assert the known-good version: the payload source may have been recreated from Git
+	// with its initial tag (ssa: IfNotPresent, ADR-0009) while the agent was down.
+	if cfg.Payload == config.PayloadK3s {
+		if err := drv.Apply(ctx, rec.State().Current); err != nil {
+			return fmt.Errorf("re-assert payload %s: %w", rec.State().Current, err)
+		}
 	}
 
 	go heartbeat(ctx, nc, rec, cfg.NodeLabels, cfg.HeartbeatInterval, log)
@@ -75,6 +86,25 @@ func run() error {
 	}
 	log.Info("shutting down")
 	return nil
+}
+
+// driver applies payload versions and checks their health.
+type driver interface {
+	reconcile.Applier
+	reconcile.HealthChecker
+}
+
+func newDriver(cfg config.Config, log *slog.Logger) (driver, error) {
+	if cfg.Payload == config.PayloadK3s {
+		k, err := payload.NewK3s(cfg.PayloadNamespace, cfg.PayloadName)
+		if err != nil {
+			return nil, fmt.Errorf("k3s payload driver: %w", err)
+		}
+		log.Info("payload driver", "driver", cfg.Payload, "namespace", cfg.PayloadNamespace, "name", cfg.PayloadName)
+		return k, nil
+	}
+	log.Info("payload driver", "driver", cfg.Payload, "badVersions", cfg.SimBadVersions)
+	return payload.Sim{ApplyDelay: 2 * time.Second, BadVersions: cfg.SimBadVersions}, nil
 }
 
 func heartbeat(ctx context.Context, nc *transport.NATS, rec *reconcile.Reconciler, labels map[string]string, every time.Duration, log *slog.Logger) {
