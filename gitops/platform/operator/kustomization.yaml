@@ -1,0 +1,18 @@
+# orbit-operator on the hub: operator/config/default (CRDs, RBAC, manager), with the
+# released image and the in-cluster NATS. Bump newTag after an operator release.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../../operator/config/default
+images:
+  - name: controller
+    newName: ghcr.io/nilsruiz/orbit-operator
+    newTag: "0.2.0"
+patches:
+  - target:
+      kind: Deployment
+      name: controller-manager
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/args/-
+        value: --nats-url=nats://nats.nats.svc.cluster.local:4222

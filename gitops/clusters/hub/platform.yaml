@@ -1,3 +1,6 @@
+# Hub platform, in dependency order: NATS (JetStream domain "hub"), then the operator,
+# which creates its KV bucket and status stream in it.
+# Monitoring (gitops/platform/monitoring) joins in Phase 4, with the SLOs it serves.
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization
 metadata:
@@ -8,6 +11,7 @@ spec:
   path: ./gitops/platform/nats-hub
   prune: true
   wait: true
+  timeout: 5m
   sourceRef:
     kind: GitRepository
     name: flux-system
@@ -15,13 +19,16 @@ spec:
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization
 metadata:
-  name: monitoring
+  name: operator
   namespace: flux-system
 spec:
+  dependsOn:
+    - name: nats-hub
   interval: 10m
-  path: ./gitops/platform/monitoring
+  path: ./gitops/platform/operator
   prune: true
+  wait: true
+  timeout: 5m
   sourceRef:
     kind: GitRepository
     name: flux-system
-# TODO(phase 2): Kustomization for the operator (config/default from operator/), depends on nats-hub.

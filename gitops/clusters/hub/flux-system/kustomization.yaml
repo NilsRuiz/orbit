@@ -1,0 +1,9 @@
+# Flux itself on the hub. Applied once by hand to bootstrap a new cluster (gitops/README.md),
+# then managed by Flux from Git.
+#   Regenerate gotk-components.yaml when bumping Flux:
+#   flux install --export --components source-controller,kustomize-controller,helm-controller
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - gotk-components.yaml
+  - gotk-sync.yaml
