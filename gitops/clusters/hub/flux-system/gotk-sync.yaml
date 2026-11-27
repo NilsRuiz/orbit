@@ -1,6 +1,6 @@
 # What Flux reconciles on the hub: this repository (public, so no credentials), path
 # gitops/clusters/hub. That path contains this directory too, so Flux manages its own
-# installation: upgrading Flux is a PR that regenerates gotk-components.yaml.
+# installation: upgrading Flux is a PR that regenerates gitops/flux/gotk-components.yaml.
 apiVersion: source.toolkit.fluxcd.io/v1
 kind: GitRepository
 metadata:

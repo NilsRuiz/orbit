@@ -22,7 +22,7 @@ spec:
   chart:
     spec:
       chart: nats
-      version: "1.x"
+      version: "2.15.3" # same as the hub (gitops/platform/nats-hub)
       sourceRef:
         kind: HelmRepository
         name: nats
@@ -34,6 +34,10 @@ spec:
           requests: { cpu: 50m, memory: 64Mi }
           limits: { memory: 256Mi }
     config:
+      # The hub refuses a second leaf connection with the same server name ("Duplicate
+      # Remote LeafNode Connection"), and the default is the pod name, the same on every
+      # satellite: prefix it with the node ID.
+      serverNamePrefix: "${NODE_ID}-"
       # Detect a silent link loss in ~30-40 s instead of 4-6 min (ADR-0006). Merged at the
       # root of nats.conf; server-wide, so it also applies to local clients (the agent).
       merge:
@@ -44,5 +48,6 @@ spec:
         merge:
           remotes:
             - url: ${HUB_LEAF_URL}  # substituted by Flux postBuild
-    # TODO(phase 3): enable JetStream with domain "${NODE_ID}" and source a local status
-    # stream into the hub, so status survives long link outages (agent/README.md).
+    # No JetStream here: status events published while the link is down are lost, and the
+    # next heartbeat re-syncs the current version. Local JetStream with a status stream
+    # sourced into the hub is on the agent's roadmap (agent/README.md, store-and-forward).

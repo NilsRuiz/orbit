@@ -1,0 +1,67 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: orbit-agent
+  labels:
+    app: orbit-agent
+spec:
+  replicas: 1
+  # Never two agents at once: both would write the same state and the same payload tag.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: orbit-agent
+  template:
+    metadata:
+      labels:
+        app: orbit-agent
+    spec:
+      serviceAccountName: orbit-agent
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532 # distroless "nonroot"
+        runAsGroup: 65532
+        fsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: agent
+          image: orbit-agent
+          env:
+            - name: ORBIT_NODE_ID
+              value: "${NODE_ID}"
+            - name: ORBIT_NODE_LABELS
+              value: "${NODE_LABELS}"
+            # The local leaf node (gitops/platform/nats-leaf); the hub's JetStream is
+            # reached through it, in domain "hub".
+            - name: ORBIT_NATS_URL
+              value: nats://nats-leaf.nats.svc.cluster.local:4222
+            - name: ORBIT_JS_DOMAIN
+              value: hub
+            - name: ORBIT_PAYLOAD
+              value: k3s
+            # Dead man's switch: includes Flux fetching the artifact and pulling the image.
+            # Keep it below the Rollouts' healthGate.timeout (2m in hack/demo), so a bad
+            # version is rolled back by the node and reported as failed.
+            - name: ORBIT_VERIFY_TIMEOUT
+              value: 90s
+            - name: ORBIT_INITIAL_VERSION
+              value: "1.0.0" # the payload OCIRepository's initial tag
+          volumeMounts:
+            - name: state
+              mountPath: /var/lib/orbit
+          # No probes yet: the agent has no health endpoint, and the distroless image has
+          # no shell for an exec probe. Tracked with the agent's metrics endpoint (#101).
+          resources:
+            requests: { cpu: 10m, memory: 32Mi }
+            limits: { memory: 128Mi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+      volumes:
+        - name: state
+          persistentVolumeClaim:
+            claimName: orbit-agent-state

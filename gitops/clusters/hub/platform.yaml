@@ -15,6 +15,12 @@ spec:
   sourceRef:
     kind: GitRepository
     name: flux-system
+  # Per-cluster values, all with defaults: an orbit-hub ConfigMap is optional.
+  postBuild:
+    substituteFrom:
+      - kind: ConfigMap
+        name: orbit-hub
+        optional: true
 ---
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization

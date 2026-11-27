@@ -1,0 +1,7 @@
+# Flux itself on an edge cluster. Applied once at bootstrap, with the node's orbit-node
+# ConfigMap (gitops/README.md), then managed by Flux from Git.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../../flux
+  - gotk-sync.yaml

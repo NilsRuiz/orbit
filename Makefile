@@ -94,7 +94,9 @@ link-degrade: ## Add latency/loss on an edge link: make link-degrade NODE=sat-2
 	./hack/scripts/link.sh degrade $(NODE)
 
 ##@ Hub cluster (k3d): the operator drives the compose fleet
-HUB_KUBECTL := kubectl --context k3d-orbit-hub
+# The demo-* targets act on this hub; the fleet-* ones below set it to the fleet's hub.
+HUB_CONTEXT ?= k3d-orbit-hub
+HUB_KUBECTL := kubectl --context $(HUB_CONTEXT)
 
 hub-up: ## Create the k3d hub cluster and deploy the operator (re-run after a change)
 	./hack/k3d/hub.sh up
@@ -117,6 +119,32 @@ demo-watch: ## Watch nodes, fleets and rollouts (refreshed every 2 s, Ctrl-C to 
 	  sleep 2; \
 	done
 
+##@ Kubernetes fleet (k3d): hub and satellites all from GitOps
+FLEET_HUB := HUB_CONTEXT=k3d-orbit-fleet-hub
+
+fleet-up: ## Create the hub + 3 satellite clusters from GitOps (SOURCE=local: this working tree)
+	./hack/k3d/fleet.sh up
+
+fleet-down: ## Delete the k3d fleet
+	./hack/k3d/fleet.sh down
+
+fleet-demo-apply: ## Apply the demo Fleet and Rollout on the fleet's hub
+	@$(MAKE) -s demo-apply $(FLEET_HUB)
+
+fleet-release: ## Release a version to the k3d fleet: make fleet-release VERSION=1.2.0
+	@$(MAKE) -s demo-release VERSION=$(VERSION) $(FLEET_HUB)
+
+fleet-watch: ## Watch the k3d fleet's nodes, fleets and rollouts
+	@$(MAKE) -s demo-watch $(FLEET_HUB)
+
+fleet-link-cut: ## Silently cut a satellite's link to the hub: make fleet-link-cut NODE=sat-1
+	@test -n "$(NODE)" || (echo "usage: make fleet-link-cut NODE=sat-1"; exit 1)
+	./hack/k3d/fleet.sh link-cut $(NODE)
+
+fleet-link-restore: ## Restore a satellite's link: make fleet-link-restore NODE=sat-1
+	@test -n "$(NODE)" || (echo "usage: make fleet-link-restore NODE=sat-1"; exit 1)
+	./hack/k3d/fleet.sh link-restore $(NODE)
+
 ##@ Infrastructure
 tf-fmt: ## Format Terraform
 	terraform fmt -recursive infra/terraform
@@ -131,4 +159,5 @@ tf-destroy: ## Destroy everything — run after each demo session!
 	terraform -chdir=$(TF_DIR) destroy
 
 .PHONY: help verify verify-go verify-tf verify-gitops verify-shell agent-test agent-lint agent-build dev-up dev-down logs desired status \
-        link-cut link-blackhole link-restore link-degrade hub-up hub-down demo-apply demo-release demo-watch tf-fmt tf-plan tf-apply tf-destroy
+        link-cut link-blackhole link-restore link-degrade hub-up hub-down demo-apply demo-release demo-watch \
+        fleet-up fleet-down fleet-demo-apply fleet-release fleet-watch fleet-link-cut fleet-link-restore tf-fmt tf-plan tf-apply tf-destroy

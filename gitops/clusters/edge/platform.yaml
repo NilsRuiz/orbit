@@ -1,5 +1,6 @@
-# Shared by all edge clusters. Per-node values come from the `orbit-node` ConfigMap
-# created at bootstrap time (see gitops/README.md).
+# Shared by all edge clusters. Per-node values come from the `orbit-node` ConfigMap in
+# flux-system, created at bootstrap (gitops/README.md): NODE_ID, NODE_LABELS, HUB_LEAF_URL.
+# Nothing here depends on the hub link being up: a satellite out of range still converges.
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization
 metadata:
@@ -10,6 +11,29 @@ spec:
   path: ./gitops/platform/nats-leaf
   prune: true
   wait: true
+  timeout: 5m
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  postBuild:
+    substituteFrom:
+      - kind: ConfigMap
+        name: orbit-node
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: agent
+  namespace: flux-system
+spec:
+  # The agent talks to the hub through its local leaf node.
+  dependsOn:
+    - name: nats-leaf
+    - name: payload
+  interval: 10m
+  path: ./gitops/apps/agent
+  prune: true
+  timeout: 5m
   sourceRef:
     kind: GitRepository
     name: flux-system

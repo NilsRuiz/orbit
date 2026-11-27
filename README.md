@@ -125,6 +125,37 @@ make link-restore NODE=sat-1             # back in range → applies, and the ro
 make hub-down && make dev-down
 ```
 
+### The same rollout on Kubernetes satellites
+
+Here every satellite is its own k3s cluster, as on the edge VMs. All four clusters come up
+**from GitOps**: Flux on each pulls this repository.
+
+- **The hub** gets NATS and the operator.
+- **Each satellite** gets a leaf NATS, the agent, and the payload, which is
+  [podinfo](https://github.com/stefanprodan/podinfo) published as signed OCI artifacts
+  (`payload/`).
+
+The agent applies a version by setting the tag of the local Flux `OCIRepository`
+([ADR-0009](docs/adr/0009-payload-driver-flux-oci.md)).
+
+```bash
+make dev-down          # free the memory: four clusters need about 5 GB
+make fleet-up          # hub + sat-1..3 (k3d), about 5 min; SOURCE=local: this working tree
+make fleet-watch       # in a second terminal
+
+make fleet-demo-apply             # same Fleet and Rollout as above → 1.1.0
+make fleet-release VERSION=6.6.6  # never ready on the canary: rolled back, rollout halted
+make fleet-release VERSION=1.2.0
+make fleet-link-cut NODE=sat-1    # silent radio loss to the hub
+make fleet-release VERSION=1.3.0  # sat-1 is pending; the rest of the fleet updates
+make fleet-link-restore NODE=sat-1
+make fleet-down
+```
+
+`kubectl --context k3d-orbit-fleet-sat-1 -n payload get deploy payload -L
+app.kubernetes.io/version` shows what a satellite actually runs. Details are in
+[hack/k3d/README.md](hack/k3d/README.md).
+
 ### The agent alone
 
 Without the operator, `make desired` writes a node's desired state directly:
