@@ -24,9 +24,15 @@ func (f *fakeApplier) Apply(_ context.Context, v string) error {
 	return nil
 }
 
-type fakeHealth struct{ unhealthy string }
+type fakeHealth struct {
+	unhealthy string
+	reason    string // why unhealthy is not healthy; empty: no reason given
+}
 
 func (f fakeHealth) Healthy(_ context.Context, v string) (bool, error) {
+	if v == f.unhealthy && f.reason != "" {
+		return false, errors.New(f.reason)
+	}
 	return v != f.unhealthy, nil
 }
 
@@ -98,6 +104,20 @@ func TestReconcile_UnhealthyRollsBack(t *testing.T) {
 	}
 	if len(a.applied) != n {
 		t.Fatalf("agent retried a version that already failed")
+	}
+}
+
+func TestReconcile_RollbackReportsWhyUnhealthy(t *testing.T) {
+	h := fakeHealth{unhealthy: "6.6.6", reason: "deployment: 1 old replicas pending termination"}
+	r, rep := newTest(state.State{Current: "1.0.0", Phase: state.PhaseIdle}, &fakeApplier{}, h)
+
+	if err := r.Reconcile(context.Background(), Desired{Version: "6.6.6"}); err != nil {
+		t.Fatal(err)
+	}
+	last := rep.statuses[len(rep.statuses)-1]
+	want := "not healthy within 50ms: deployment: 1 old replicas pending termination"
+	if last.Phase != state.PhaseRolledBack || last.Message != want {
+		t.Fatalf("last status = %s %q, want rolled-back %q", last.Phase, last.Message, want)
 	}
 }
 

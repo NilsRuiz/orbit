@@ -25,7 +25,9 @@ type Applier interface {
 	Apply(ctx context.Context, version string) error
 }
 
-// HealthChecker reports whether the payload is healthy on the given version.
+// HealthChecker reports whether the payload is healthy on the given version. When it is
+// not, a non-nil error says why (a check that failed, or a version still on its way); the
+// last one is reported with the rollback.
 type HealthChecker interface {
 	Healthy(ctx context.Context, version string) (bool, error)
 }
@@ -128,11 +130,15 @@ func (r *Reconciler) Reconcile(ctx context.Context, d Desired) error {
 		return err
 	}
 
-	if ok := r.verify(ctx, d.Version); !ok {
+	if ok, why := r.verify(ctx, d.Version); !ok {
 		if ctx.Err() != nil {
 			return ctx.Err() // shutting down: Resume() will roll back on next boot
 		}
-		return r.rollback(ctx, fmt.Sprintf("not healthy within %s", r.cfg.VerifyTimeout))
+		reason := fmt.Sprintf("not healthy within %s", r.cfg.VerifyTimeout)
+		if why != nil {
+			reason += ": " + why.Error()
+		}
+		return r.rollback(ctx, reason)
 	}
 
 	r.st.Previous = r.st.Current
@@ -142,24 +148,29 @@ func (r *Reconciler) Reconcile(ctx context.Context, d Desired) error {
 	return r.transition(ctx, state.PhaseIdle, "healthy on "+d.Version)
 }
 
-// verify polls health until healthy or the dead man's switch fires.
-func (r *Reconciler) verify(ctx context.Context, version string) bool {
+// verify polls health until healthy or the dead man's switch fires. When it fires, it
+// returns the last reason the health checker gave (nil if none).
+func (r *Reconciler) verify(ctx context.Context, version string) (bool, error) {
 	deadline, cancel := context.WithTimeout(ctx, r.cfg.VerifyTimeout)
 	defer cancel()
 	ticker := time.NewTicker(r.cfg.VerifyInterval)
 	defer ticker.Stop()
 
+	var why error
 	for {
 		ok, err := r.health.Healthy(deadline, version)
-		if err != nil {
-			r.log.Debug("health check error", "err", err)
-		}
 		if ok {
-			return true
+			return true, nil
+		}
+		// A check cut short by the deadline says nothing about the payload: keep the
+		// previous reason.
+		if err != nil && deadline.Err() == nil {
+			why = err
+			r.log.Debug("not healthy yet", "version", version, "reason", err)
 		}
 		select {
 		case <-deadline.Done():
-			return false
+			return false, why
 		case <-ticker.C:
 		}
 	}
