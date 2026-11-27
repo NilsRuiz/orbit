@@ -55,8 +55,10 @@ metadata:
     networking.gke.io/load-balancer-type: "Internal"
 spec:
   type: LoadBalancer
+  # Edge nodes only. Default: the GCP edge subnet (infra/terraform/modules/network
+  # nodes_cidr); a cluster overrides it in its orbit-hub ConfigMap (gitops/README.md).
   loadBalancerSourceRanges:
-    - 10.10.0.0/20 # edge subnet (infra/terraform/modules/network nodes_cidr)
+    - ${LEAF_SOURCE_RANGE:=10.10.0.0/20}
   selector:
     app.kubernetes.io/name: nats
     app.kubernetes.io/instance: nats

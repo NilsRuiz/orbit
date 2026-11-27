@@ -1,10 +1,12 @@
 # GitOps (Flux)
 
 ```
+flux/           Flux v2.10.1 components (generated), shared by every cluster
 clusters/
   hub/          entrypoint of the hub cluster
-    flux-system/  Flux itself (generated components + what to sync), managed by Flux
-  edge/         entrypoint shared by every edge cluster (node ID injected via postBuild)
+    flux-system/  Flux itself and what it syncs, managed by Flux
+  edge/         entrypoint shared by every edge cluster (per-node values via postBuild)
+    flux-system/
 platform/
   nats-hub/     NATS 2.15.3 + JetStream (domain "hub"), leaf-node port behind an internal LB
   operator/     orbit-operator (operator/config/default, released image, in-cluster NATS)
@@ -13,6 +15,7 @@ platform/
 apps/
   payload/      where the payload's versions come from (OCIRepository), how they are
                 applied (Kustomization), and the agent's RBAC
+  agent/        orbit-agent (k3s payload driver), its state on the node's disk
 ```
 
 ## Bootstrap
@@ -33,14 +36,31 @@ flux get kustomizations --watch   # flux-system, then nats-hub, then operator
   exactly the committed files, and Flux adopts them at once: later changes are PRs.
 - **If the first apply fails** on `no matches for kind`, run it again. It applies the Flux
   CRDs and objects of those kinds together.
-- **Upgrading Flux**: regenerate `flux-system/gotk-components.yaml` (command in its
+- **Upgrading Flux**: regenerate `flux/gotk-components.yaml` (command in its
   `kustomization.yaml`) in a PR.
 - **Upgrading the operator**: bump `newTag` in `platform/operator` after a release.
 - **The KV bucket** `orbit-desired` appears with the first `Rollout` (the operator creates
   it on first use). Until then agents wait for it; the status stream exists from the start.
 
-**Edge clusters**: their bootstrap comes with #88 (P3.3), from the VMs' startup script
-(#90).
+**An edge cluster** needs its `orbit-node` ConfigMap first, then the same single apply.
+On the edge VMs, their startup script runs both (#90). Locally, `make fleet-up` does
+(hack/k3d/README.md).
+
+```bash
+kubectl create namespace flux-system
+kubectl -n flux-system create configmap orbit-node --from-literal=NODE_ID=sat-1 \
+  --from-literal=NODE_LABELS=orbit.io/constellation=alpha \
+  --from-literal=HUB_LEAF_URL=nats-leaf://<hub leaf address>:7422
+kubectl apply --server-side -k gitops/clusters/edge/flux-system
+```
+
+**Per-cluster values** are the only state not in Git, because they differ between
+clusters. Flux substitutes them (`postBuild`):
+
+| ConfigMap (`flux-system`) | Cluster | Keys |
+|---|---|---|
+| `orbit-node` | each edge cluster, required | `NODE_ID` (DNS-1123 label), `NODE_LABELS` (`orbit.io/*`, comma-separated), `HUB_LEAF_URL` |
+| `orbit-hub` | the hub, optional | `LEAF_SOURCE_RANGE`: who may open a leaf connection, default the GCP edge subnet `10.10.0.0/20` |
 
 Versions of the `payload` app on edge nodes are **not** changed through Git. Each version
 is a signed OCI artifact built from [`payload/`](../payload/). The operator writes the

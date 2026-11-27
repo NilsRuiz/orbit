@@ -1,0 +1,12 @@
+# The agent's A/B state (ADR-0004): what it runs and what failed. It must survive a pod
+# restart and a node reboot or preemption, so it lives on the node's disk (k3s local-path),
+# not in the pod.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: orbit-agent-state
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 16Mi
