@@ -1,0 +1,59 @@
+# Template of one payload version, rendered by hack/payload/render.sh: the placeholders
+# in double underscores are replaced from payload/versions.tsv.
+# podinfo is a stand-in "satellite payload" with version and health endpoints.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: payload
+  labels:
+    app: payload
+    app.kubernetes.io/version: "__VERSION__"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: payload
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      # Keep the old pod until the new one is ready: a bad version leaves the payload
+      # running on the previous one while the agent decides to roll back.
+      maxUnavailable: 0
+      maxSurge: 1
+  template:
+    metadata:
+      labels:
+        app: payload
+        app.kubernetes.io/version: "__VERSION__"
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        # podinfo's image user is named ("app"): the kubelet can only enforce runAsNonRoot
+        # on a numeric UID. 100:101 is "app" in the podinfo images.
+        runAsUser: 100
+        runAsGroup: 101
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: podinfo
+          image: ghcr.io/stefanprodan/podinfo:__PODINFO_TAG__
+          env:
+            - name: PODINFO_UI_MESSAGE
+              value: "orbit payload __VERSION__"
+          ports:
+            - containerPort: 9898
+          readinessProbe:
+            # An unhealthy version probes a path that does not exist: never ready, but not
+            # restarted (liveness stays on /healthz), so the failure is deterministic.
+            httpGet: { path: __READY_PATH__, port: 9898 }
+            periodSeconds: 5
+          livenessProbe:
+            httpGet: { path: /healthz, port: 9898 }
+          resources:
+            requests: { cpu: 20m, memory: 32Mi }
+            limits: { memory: 128Mi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]

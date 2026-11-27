@@ -1,0 +1,60 @@
+# Publishes the payload versions of payload/versions.tsv as signed OCI artifacts
+# (ghcr.io/<owner>/orbit-payload:<version>), which edge agents select by tag (ADR-0009).
+# Pull requests only render and validate them. Published versions are immutable: the
+# publish fails if a published version's manifests changed (hack/payload/publish.sh).
+name: payload
+
+on:
+  push:
+    branches: [main]
+    paths: ["payload/**", "hack/payload/**", ".github/workflows/payload.yml"]
+  pull_request:
+    paths: ["payload/**", "hack/payload/**", ".github/workflows/payload.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  FLUX_VERSION: 2.10.1
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install kubeconform
+        run: |
+          go install github.com/yannh/kubeconform/cmd/kubeconform@v0.8.0
+          echo "$HOME/go/bin" >> "$GITHUB_PATH"
+      - name: Render and validate every version
+        run: |
+          set -euo pipefail
+          awk -F'\t' '!/^#/ && NF { print $1 }' payload/versions.tsv | while read -r v; do
+            hack/payload/render.sh "$v" "out/$v"
+            kubeconform -strict -summary -ignore-filename-pattern kustomization.yaml "out/$v"
+          done
+
+  publish:
+    needs: validate
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    # One publish at a time: two runs racing on a new version would both push it.
+    concurrency: payload-publish
+    permissions:
+      contents: read
+      packages: write   # push to GHCR
+      id-token: write   # keyless cosign signing (OIDC); edge clusters verify this identity
+    steps:
+      - uses: actions/checkout@v7
+      - uses: fluxcd/flux2/action@v2.10.1
+        with:
+          version: ${{ env.FLUX_VERSION }}
+      - uses: sigstore/cosign-installer@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Publish and sign new versions
+        run: hack/payload/publish.sh "ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/orbit-payload"
