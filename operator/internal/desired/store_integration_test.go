@@ -60,8 +60,10 @@ func get(t *testing.T, kv jetstream.KeyValue, node string) (Value, uint64) {
 	return v, e.Revision()
 }
 
-func TestOpenWithoutBucket(t *testing.T) {
-	s, err := server.NewServer(&server.Options{Host: "127.0.0.1", Port: -1, JetStream: true, StoreDir: t.TempDir(), NoLog: true, NoSigs: true})
+// Open creates the bucket (TestLazyCreatesTheBucket), but it cannot without JetStream: the
+// error must surface, not a nil store.
+func TestOpenWithoutJetStream(t *testing.T) {
+	s, err := server.NewServer(&server.Options{Host: "127.0.0.1", Port: -1, NoLog: true, NoSigs: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -76,8 +78,10 @@ func TestOpenWithoutBucket(t *testing.T) {
 	}
 	defer nc.Close()
 	js, _ := jetstream.New(nc)
-	if _, err := Open(context.Background(), js); err == nil {
-		t.Fatal("Open succeeded without the bucket")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if st, err := Open(ctx, js); err == nil || st != nil {
+		t.Fatalf("Open without JetStream = %v, %v; want an error", st, err)
 	}
 }
 
@@ -205,7 +209,7 @@ func TestEnsureOverInvalidValue(t *testing.T) {
 	}
 }
 
-func TestLazyOpensOnceTheBucketExists(t *testing.T) {
+func TestLazyCreatesTheBucket(t *testing.T) {
 	s, err := server.NewServer(&server.Options{Host: "127.0.0.1", Port: -1, JetStream: true, StoreDir: t.TempDir(), NoLog: true, NoSigs: true})
 	if err != nil {
 		t.Fatal(err)
@@ -223,18 +227,56 @@ func TestLazyOpensOnceTheBucketExists(t *testing.T) {
 	js, _ := jetstream.New(nc)
 	ctx := context.Background()
 
+	// A fresh hub has no bucket: the operator owns it and creates it.
 	l := &Lazy{JS: js}
-	if _, err := l.Store(ctx); err == nil {
-		t.Fatal("Store succeeded before the bucket exists")
-	}
-	if _, err := js.CreateKeyValue(ctx, jetstream.KeyValueConfig{Bucket: Bucket}); err != nil {
-		t.Fatal(err)
-	}
 	st, err := l.Store(ctx)
 	if err != nil {
-		t.Fatalf("Store after the bucket was created: %v", err)
+		t.Fatalf("Store on a fresh hub: %v", err)
+	}
+	kv, err := js.KeyValue(ctx, Bucket)
+	if err != nil {
+		t.Fatalf("bucket not created: %v", err)
+	}
+	if status, err := kv.Status(ctx); err != nil || status.History() != 5 {
+		t.Errorf("bucket history = %v (%v), want 5", status.History(), err)
 	}
 	if again, _ := l.Store(ctx); again != st {
 		t.Error("Store reopened the bucket instead of reusing it")
+	}
+}
+
+func TestOpenKeepsAnExistingBucket(t *testing.T) {
+	s, err := server.NewServer(&server.Options{Host: "127.0.0.1", Port: -1, JetStream: true, StoreDir: t.TempDir(), NoLog: true, NoSigs: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	go s.Start()
+	if !s.ReadyForConnections(5 * time.Second) {
+		t.Fatal("nats server not ready")
+	}
+	defer s.Shutdown()
+	nc, err := nats.Connect(s.ClientURL())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer nc.Close()
+	js, _ := jetstream.New(nc)
+	ctx := context.Background()
+
+	// Created beforehand, as by hack/scripts/init-hub.sh, with a node's desired state.
+	kv, err := js.CreateKeyValue(ctx, jetstream.KeyValueConfig{Bucket: Bucket, History: 5})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := kv.Put(ctx, "sat-1", []byte(`{"version":"1.1.0","rolloutId":"payload-g1"}`)); err != nil {
+		t.Fatal(err)
+	}
+	st, err := Open(ctx, js)
+	if err != nil {
+		t.Fatalf("Open on an existing bucket: %v", err)
+	}
+	e, err := st.Get(ctx, "sat-1")
+	if err != nil || !e.Exists || e.Version != "1.1.0" {
+		t.Errorf("entry after Open = %+v (%v), want the existing 1.1.0", e, err)
 	}
 }

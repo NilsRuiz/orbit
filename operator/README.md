@@ -31,6 +31,21 @@ versions pinned in the `Makefile`.
 | `Fleet` | Cluster | Git | Label selector over `EdgeNode`s |
 | `Rollout` | Cluster | Git | Target version + waves + health gate for a fleet |
 
+## NATS resources
+
+The operator **owns** its JetStream resources on the hub and creates them at start-up, or
+updates them to the configuration declared in its code, keeping their content:
+
+| Resource | Config | Created by |
+|---|---|---|
+| KV `orbit-desired` | history 5, file storage (`desired.BucketConfig`) | the Rollout controller, on first use |
+| Stream `ORBIT_STATUS` | `orbit.edge.*.status`, file, limits, 7 days (`ingest.StatusStreamConfig`) | the ingester, retried until the hub answers |
+
+A fresh hub needs nothing else. In docker compose, `hack/scripts/init-hub.sh` creates them
+for the agent-only demo, which has no operator. An incompatible existing stream (for
+example memory storage, which cannot be changed in place) makes the ingester log
+`status stream not ready, retrying`, until it is deleted.
+
 ## Controllers
 
 **EdgeNode ingestion and controller** ([ADR-0007](../docs/adr/0007-edgenode-registration-from-heartbeats.md)):
