@@ -22,7 +22,9 @@ spec:
   chart:
     spec:
       chart: nats
-      version: "1.x" # pin an exact version once tested
+      # Chart versions follow nats-server since 2.x. 2.15.3 is the server version the
+      # agent and operator integration tests run against.
+      version: "2.15.3"
       sourceRef:
         kind: HelmRepository
         name: nats

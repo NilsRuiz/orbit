@@ -2,7 +2,8 @@ name: gitops
 
 on:
   pull_request:
-    paths: ["gitops/**", ".github/workflows/gitops.yml"]
+    # operator/config is built into the hub's GitOps (gitops/platform/operator).
+    paths: ["gitops/**", "operator/config/**", ".github/workflows/gitops.yml"]
 
 permissions:
   contents: read
@@ -13,9 +14,10 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - name: Install kustomize and kubeconform
+        # Pinned: "latest" lets a new release turn CI red with no change here.
         run: |
-          go install sigs.k8s.io/kustomize/kustomize/v5@latest
-          go install github.com/yannh/kubeconform/cmd/kubeconform@latest
+          go install sigs.k8s.io/kustomize/kustomize/v5@v5.8.1
+          go install github.com/yannh/kubeconform/cmd/kubeconform@v0.8.0
           echo "$HOME/go/bin" >> "$GITHUB_PATH"
       - name: Build and validate every kustomization
         run: |
