@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.0](https://github.com/NilsRuiz/orbit/compare/operator-v0.1.0...operator-v0.2.0) (2026-11-27)
+
+
+### Features
+
+* **operator:** create the KV bucket and status stream it owns ([#97](https://github.com/NilsRuiz/orbit/issues/97)) ([491e10e](https://github.com/NilsRuiz/orbit/commit/491e10e651adccee39475363470802b210b5b6a4)), closes [#87](https://github.com/NilsRuiz/orbit/issues/87)
+
 ## 0.1.0 (2026-11-26)
 
 
