@@ -1,4 +1,10 @@
+# The payload's *versions* are not in Git: they are OCI artifacts (payload/, published by
+# CI), and the agent picks one by setting the OCIRepository tag (ADR-0009). Git only
+# declares where they come from, how they are applied, and what the agent may touch.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
-  - deployment.yaml
+  - namespace.yaml
+  - source.yaml
+  - release.yaml
+  - rbac.yaml

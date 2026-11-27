@@ -1,0 +1,34 @@
+# What the agent may touch (ADR-0009): set the payload source tag, read the result.
+# Nothing else in the cluster. The agent's ServiceAccount is deployed with the agent (#88).
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: orbit-agent
+  namespace: payload
+rules:
+  - apiGroups: ["source.toolkit.fluxcd.io"]
+    resources: ["ocirepositories"]
+    resourceNames: ["payload"]
+    verbs: ["get", "patch"]
+  - apiGroups: ["kustomize.toolkit.fluxcd.io"]
+    resources: ["kustomizations"]
+    resourceNames: ["payload"]
+    verbs: ["get"]
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    resourceNames: ["payload"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: orbit-agent
+  namespace: payload
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: orbit-agent
+subjects:
+  - kind: ServiceAccount
+    name: orbit-agent
+    namespace: orbit-system

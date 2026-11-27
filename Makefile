@@ -44,7 +44,7 @@ verify-gitops: ## kustomize build | kubeconform for every kustomization
 	done
 
 verify-shell: ## shellcheck all scripts
-	shellcheck hack/scripts/*.sh hack/k3d/*.sh .claude/hooks/*.sh
+	shellcheck hack/scripts/*.sh hack/k3d/*.sh hack/payload/*.sh .claude/hooks/*.sh
 
 ##@ Agent
 agent-test: ## Run agent unit tests

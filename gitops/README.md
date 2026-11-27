@@ -9,7 +9,8 @@ platform/
   nats-leaf/    NATS leaf node on each edge node
   monitoring/   kube-prometheus-stack (hub)
 apps/
-  payload/      the workload the fleet runs (podinfo as a stand-in "satellite payload")
+  payload/      where the payload's versions come from (OCIRepository), how they are
+                applied (Kustomization), and the agent's RBAC
 ```
 
 ## Bootstrap
@@ -24,5 +25,9 @@ kubectl -n flux-system create configmap orbit-node --from-literal=NODE_ID=sat-1 
   --from-literal=HUB_LEAF_URL=nats-leaf://<hub-internal-lb-ip>:7422
 ```
 
-Versions of the `payload` app on edge nodes are **not** changed through Git: the operator
-writes them into NATS and the agent applies them (ADR-0003, ADR-0004).
+Versions of the `payload` app on edge nodes are **not** changed through Git. Each version
+is a signed OCI artifact built from [`payload/`](../payload/). The operator writes the
+desired version into NATS, and the agent sets the tag of the `payload` OCIRepository
+(ADR-0003, ADR-0004, [ADR-0009](../docs/adr/0009-payload-driver-flux-oci.md)). Flux creates
+that OCIRepository once and does not overwrite it (`ssa: IfNotPresent`): to change its
+spec on a running cluster, delete it and let Flux recreate it.
