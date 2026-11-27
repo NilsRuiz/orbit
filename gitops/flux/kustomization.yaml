@@ -1,0 +1,8 @@
+# Flux v2.10.1 components, shared by the hub and the edge clusters (source, kustomize and
+# helm controllers). Generated, do not edit: to upgrade Flux, regenerate in a PR with
+#   flux install --export --components source-controller,kustomize-controller,helm-controller \
+#     > gitops/flux/gotk-components.yaml
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - gotk-components.yaml
