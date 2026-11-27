@@ -8,6 +8,12 @@ import (
 	"time"
 )
 
+// Payload drivers (internal/payload).
+const (
+	PayloadSim = "sim" // simulator, for docker compose
+	PayloadK3s = "k3s" // Flux OCIRepository tag on the node's cluster (ADR-0009)
+)
+
 // Config is the agent configuration, read from ORBIT_* environment variables.
 type Config struct {
 	NodeID            string
@@ -20,6 +26,11 @@ type Config struct {
 	VerifyTimeout     time.Duration
 	LogLevel          string
 	SimBadVersions    []string
+	// Payload selects the driver; with k3s, PayloadNamespace/PayloadName name the
+	// OCIRepository, the Kustomization and the Deployment of the payload.
+	Payload          string
+	PayloadNamespace string
+	PayloadName      string
 	// NodeLabels are sent in heartbeats; the operator mirrors them on the EdgeNode.
 	NodeLabels map[string]string
 }
@@ -36,12 +47,19 @@ func FromEnv() (Config, error) {
 		StateDir:        getenv("ORBIT_STATE_DIR", "/var/lib/orbit"),
 		InitialVersion:  getenv("ORBIT_INITIAL_VERSION", "1.0.0"),
 		LogLevel:        getenv("ORBIT_LOG_LEVEL", "info"),
+
+		Payload:          getenv("ORBIT_PAYLOAD", PayloadSim),
+		PayloadNamespace: getenv("ORBIT_PAYLOAD_NAMESPACE", "payload"),
+		PayloadName:      getenv("ORBIT_PAYLOAD_NAME", "payload"),
 	}
 	if c.NodeID == "" {
 		return c, fmt.Errorf("ORBIT_NODE_ID is required")
 	}
 	if err := ValidateNodeID(c.NodeID); err != nil {
 		return c, fmt.Errorf("ORBIT_NODE_ID: %w", err)
+	}
+	if c.Payload != PayloadSim && c.Payload != PayloadK3s {
+		return c, fmt.Errorf("ORBIT_PAYLOAD: %q is not %q or %q", c.Payload, PayloadSim, PayloadK3s)
 	}
 	var err error
 	if c.NodeLabels, err = ParseNodeLabels(os.Getenv("ORBIT_NODE_LABELS")); err != nil {

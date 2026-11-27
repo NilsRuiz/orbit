@@ -10,7 +10,7 @@ internal/config/      env-based configuration
 internal/state/       A/B state persisted atomically on disk (survives reboots/preemption)
 internal/reconcile/   state machine: idle → applying → verifying → idle | rolled-back
 internal/transport/   NATS: KV watch, status to JetStream, heartbeats
-internal/payload/     payload drivers (Sim today, k3s/Flux in phase 3)
+internal/payload/     payload drivers: Sim (docker compose), K3s (Flux OCIRepository tag)
 ```
 
 ## Development
@@ -18,9 +18,14 @@ internal/payload/     payload drivers (Sim today, k3s/Flux in phase 3)
 Module path: `github.com/NilsRuiz/orbit/agent`.
 
 ```bash
-go test -race ./...  # unit tests + integration tests against in-process NATS servers
+make test            # go vet + go test -race: unit tests, in-process NATS servers, envtest
 go mod tidy          # after changing dependencies; commit go.mod and go.sum
 ```
+
+`make test` downloads envtest (a real kube-apiserver and etcd) into `bin/` for the k3s
+driver tests. They run against the Flux CRDs of the pinned Flux release
+(`internal/payload/testdata/crds`, refresh them when bumping Flux); a plain `go test`
+without `KUBEBUILDER_ASSETS` fails on purpose.
 
 `TestConvergenceAfterLeafLinkCut` reproduces the edge topology (agent → leaf → hub) with an
 in-process TCP proxy as the "space link". It bounds convergence to 20 s after a 12 s
@@ -38,9 +43,36 @@ about 20 s.
 | `ORBIT_STATE_DIR` | `/var/lib/orbit` | Where `state.json` lives |
 | `ORBIT_INITIAL_VERSION` | `1.0.0` | Version assumed on first boot |
 | `ORBIT_HEARTBEAT_INTERVAL` | `10s` | |
-| `ORBIT_VERIFY_TIMEOUT` | `30s` | Dead man's switch deadline |
-| `ORBIT_SIM_BAD_VERSIONS` | — | Comma-separated versions the simulator reports unhealthy |
+| `ORBIT_VERIFY_TIMEOUT` | `30s` | Dead man's switch deadline. With `k3s`, it includes Flux fetching the artifact and pulling the image: raise it (minutes) |
+| `ORBIT_PAYLOAD` | `sim` | Payload driver: `sim` (simulator) or `k3s` (see below) |
+| `ORBIT_PAYLOAD_NAMESPACE` | `payload` | `k3s`: namespace of the payload objects |
+| `ORBIT_PAYLOAD_NAME` | `payload` | `k3s`: name shared by the `OCIRepository`, the `Kustomization` and the Deployment |
+| `ORBIT_SIM_BAD_VERSIONS` | — | `sim`: comma-separated versions the simulator reports unhealthy |
 | `ORBIT_NODE_LABELS` | — | `orbit.io/<name>=<value>` pairs, comma-separated (e.g. `orbit.io/constellation=alpha`). Sent in heartbeats; the operator mirrors them on the `EdgeNode` and `Fleet`s select on them (ADR-0007). Other prefixes are refused at start-up |
+
+## Payload drivers
+
+**`k3s`** deploys versions on the node's cluster through Flux
+([ADR-0009](../docs/adr/0009-payload-driver-flux-oci.md)). Each version is a signed OCI
+artifact built from [`payload/`](../payload/).
+
+- **Apply** sets the tag of the payload `OCIRepository` (`gitops/apps/payload`), and Flux
+  fetches and applies the artifact. A rollback is the same call with the previous version.
+- **Healthy** requires three things:
+  1. the source fetched the version;
+  2. the `Kustomization` applied that exact revision and is `Ready`;
+  3. the Deployment finished rolling out: no old replica left, every replica updated and
+     available.
+
+  Otherwise the agent says why, and a rollback reports it, e.g. `not healthy within 2m:
+  deployment: 1 old replicas pending termination`.
+- **At start-up** the agent sets the tag to its known-good version again. Flux recreates the
+  `OCIRepository` with its initial tag if it was deleted.
+- **Cluster access**: the in-cluster service account, or `KUBECONFIG` outside the cluster.
+  Its RBAC is the `orbit-agent` Role in `gitops/apps/payload`.
+
+**`sim`** pretends: applying takes 2 s, and versions in `ORBIT_SIM_BAD_VERSIONS` are
+unhealthy.
 
 ## Messages
 
@@ -97,7 +129,7 @@ JSON on stdout (`log/slog`). NATS connection events worth alerting on:
 - [ ] **Status store-and-forward**: today a status published while the hub link is down is
       lost (heartbeats re-sync the current version). Fix: enable JetStream on the leaf node
       with its own domain and *source* a local status stream into the hub's `ORBIT_STATUS`.
-- [ ] **K3s payload driver** (#86): set the local Flux `OCIRepository` tag, check that the
+- [x] **K3s payload driver** (#86): set the local Flux `OCIRepository` tag, check that the
       revision is applied and the Deployment rolled out
       ([ADR-0009](../docs/adr/0009-payload-driver-flux-oci.md)).
 - [ ] **Metrics**: Prometheus endpoint (`orbit_agent_phase`, `orbit_agent_rollbacks_total`).

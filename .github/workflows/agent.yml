@@ -30,8 +30,9 @@ jobs:
           go-version-file: agent/go.mod
           cache-dependency-path: agent/go.sum
       - run: go mod verify
-      - run: go vet ./...
-      - run: go test -race -coverprofile=coverage.out ./...
+      # go vet, then go test -race. The k3s payload driver tests need envtest (a real
+      # kube-apiserver + etcd), which make test downloads at the versions in go.mod.
+      - run: make test
       - uses: golangci/golangci-lint-action@v9
         with:
           # Pinned: "latest" lets new linter releases turn CI red with no code change.
