@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.0](https://github.com/NilsRuiz/orbit/compare/agent-v0.3.0...agent-v0.4.0) (2026-11-27)
+
+
+### Features
+
+* **agent:** deploy payload versions on k3s through a Flux OCIRepository ([#94](https://github.com/NilsRuiz/orbit/issues/94)) ([d143f2a](https://github.com/NilsRuiz/orbit/commit/d143f2ab53beea2f9c4594c9a8f69fdef1eaaafa))
+
 ## [0.3.0](https://github.com/NilsRuiz/orbit/compare/agent-v0.2.0...agent-v0.3.0) (2026-11-26)
 
 
