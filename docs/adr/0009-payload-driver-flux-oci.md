@@ -1,6 +1,6 @@
 # ADR-0009: The agent deploys payload versions through a Flux OCIRepository tag
 
-- **Status**: Proposed
+- **Status**: Accepted
 - **Date**: 2026-11-26
 
 ## Context
