@@ -57,7 +57,21 @@ type hub struct {
 	js  jetstream.JetStream
 }
 
+// startHub starts a hub whose status stream already exists, as hack/scripts/init-hub.sh
+// creates it for docker compose.
 func startHub(t *testing.T) *hub {
+	t.Helper()
+	h := startBareHub(t)
+	if _, err := h.js.CreateStream(context.Background(), jetstream.StreamConfig{
+		Name: StatusStream, Subjects: []string{"orbit.edge.*.status"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	return h
+}
+
+// startBareHub starts a hub with JetStream and nothing else, like a fresh cluster.
+func startBareHub(t *testing.T) *hub {
 	t.Helper()
 	s, err := server.NewServer(&server.Options{
 		Host: "127.0.0.1", Port: -1, JetStream: true, StoreDir: t.TempDir(), NoLog: true, NoSigs: true,
@@ -77,12 +91,6 @@ func startHub(t *testing.T) *hub {
 	t.Cleanup(nc.Close)
 	js, err := jetstream.New(nc)
 	if err != nil {
-		t.Fatal(err)
-	}
-	// Same stream as hack/scripts/init-hub.sh.
-	if _, err := js.CreateStream(context.Background(), jetstream.StreamConfig{
-		Name: StatusStream, Subjects: []string{"orbit.edge.*.status"},
-	}); err != nil {
 		t.Fatal(err)
 	}
 	return &hub{url: s.ClientURL(), nc: nc, js: js}
@@ -531,4 +539,54 @@ func TestFirstContactIsNotARestore(t *testing.T) {
 	if evs := drainEvents(rec); hasEvent(evs, "Normal ContactRestored") {
 		t.Errorf("events = %q, want no ContactRestored on first contact", evs)
 	}
+}
+
+func TestIngesterCreatesTheStatusStream(t *testing.T) {
+	h := startBareHub(t)
+	run(t, h, newClock(time.Now().Add(-time.Hour)))
+	name := nodeName(t, "sat")
+	registered(t, h, name, Heartbeat{Current: "1.0.0", Phase: "idle"})
+
+	ctx := context.Background()
+	var stream jetstream.Stream
+	eventually(t, "stream "+StatusStream, func() bool {
+		var err error
+		stream, err = h.js.Stream(ctx, StatusStream)
+		return err == nil
+	})
+	cfg := stream.CachedInfo().Config
+	if !slices.Equal(cfg.Subjects, []string{"orbit.edge.*.status"}) || cfg.Storage != jetstream.FileStorage ||
+		cfg.Retention != jetstream.LimitsPolicy || cfg.MaxAge != 7*24*time.Hour {
+		t.Errorf("stream config = subjects %v, storage %v, retention %v, max age %v; want orbit.edge.*.status, file, limits, 168h",
+			cfg.Subjects, cfg.Storage, cfg.Retention, cfg.MaxAge)
+	}
+
+	seq := status(t, h, Status{NodeID: name, Phase: "applying", Current: "1.0.0", Target: "1.1.0", RolloutID: "r-1"})
+	eventually(t, "status applied", func() bool {
+		en, _ := get(t, name)
+		return en.Status.ObservedStatusSeq == int64(seq)
+	})
+}
+
+func TestIngesterKeepsAnExistingStream(t *testing.T) {
+	h := startHub(t) // created beforehand, as by hack/scripts/init-hub.sh
+	name := nodeName(t, "sat")
+	status(t, h, Status{NodeID: name, Phase: "idle", Current: "1.0.0"})
+
+	run(t, h, newClock(time.Now().Add(-time.Hour)))
+	ctx := context.Background()
+	eventually(t, "stream updated to the operator's config", func() bool {
+		stream, err := h.js.Stream(ctx, StatusStream)
+		if err != nil {
+			t.Fatal(err)
+		}
+		info, err := stream.Info(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if info.State.Msgs != 1 {
+			t.Fatalf("stream holds %d messages after the operator started, want the 1 published before", info.State.Msgs)
+		}
+		return info.Config.MaxAge == 7*24*time.Hour
+	})
 }

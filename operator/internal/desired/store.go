@@ -17,8 +17,18 @@ import (
 	"github.com/nats-io/nats.go/jetstream"
 )
 
-// Bucket is the desired-state KV bucket, created by the hub (hack/scripts/init-hub.sh).
+// Bucket is the desired-state KV bucket. The operator owns it: Open creates it, or updates
+// an existing one (e.g. from hack/scripts/init-hub.sh) to BucketConfig.
 const Bucket = "orbit-desired"
+
+// BucketConfig is the bucket's configuration, declared here rather than on the hub.
+var BucketConfig = jetstream.KeyValueConfig{
+	Bucket:      Bucket,
+	Description: "Desired state of each edge node (key = node ID), written by orbit-operator",
+	// A few revisions back, to see what a node was told before (nats kv history).
+	History: 5,
+	Storage: jetstream.FileStorage,
+}
 
 // RevertSuffix marks a value written by a revert: rolloutId "<id>-revert". A second
 // revert does not recognise the value as its own, and the run never re-writes the node.
@@ -51,11 +61,11 @@ type Store struct {
 	kv jetstream.KeyValue
 }
 
-// Open binds to the existing bucket.
+// Open creates the bucket, or updates it to BucketConfig, keeping its entries.
 func Open(ctx context.Context, js jetstream.JetStream) (*Store, error) {
-	kv, err := js.KeyValue(ctx, Bucket)
+	kv, err := js.CreateOrUpdateKeyValue(ctx, BucketConfig)
 	if err != nil {
-		return nil, fmt.Errorf("open KV %s: %w", Bucket, err)
+		return nil, fmt.Errorf("create or update KV %s: %w", Bucket, err)
 	}
 	return &Store{kv: kv}, nil
 }

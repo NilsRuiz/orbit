@@ -30,6 +30,7 @@ import (
 const (
 	HeartbeatSubjects = "orbit.edge.*.heartbeat"
 	StatusStream      = "ORBIT_STATUS"
+	StatusSubjects    = "orbit.edge.*.status"
 	// ConsumerName is the operator's durable consumer on StatusStream.
 	ConsumerName = "orbit-operator"
 )
@@ -114,31 +115,56 @@ func (in *Ingester) Start(ctx context.Context) error {
 	return nil
 }
 
-// statusConsumer creates (or finds) the durable consumer, retrying until the stream
-// exists: the hub may come up after the operator.
+// StatusStreamConfig is the status stream's configuration. The operator owns the stream:
+// it creates it, or updates an existing one (e.g. from hack/scripts/init-hub.sh), keeping
+// its messages.
+var StatusStreamConfig = jetstream.StreamConfig{
+	Name:        StatusStream,
+	Description: "Status events of edge agents, consumed by orbit-operator",
+	Subjects:    []string{StatusSubjects},
+	Storage:     jetstream.FileStorage,
+	Retention:   jetstream.LimitsPolicy,
+	// Long enough to cover a node's longest link outage plus an operator outage; replays
+	// are idempotent (status.observedStatusSeq).
+	MaxAge: 7 * 24 * time.Hour,
+}
+
+// statusConsumer creates (or updates) the stream and the durable consumer, retrying until
+// it works: the hub may come up after the operator.
 func (in *Ingester) statusConsumer(ctx context.Context) (jetstream.Consumer, error) {
 	js, err := jetstream.New(in.NC)
 	if err != nil {
 		return nil, fmt.Errorf("jetstream: %w", err)
 	}
 	for {
-		cons, err := js.CreateOrUpdateConsumer(ctx, StatusStream, jetstream.ConsumerConfig{
-			Durable:   ConsumerName,
-			AckPolicy: jetstream.AckExplicitPolicy,
-			// A new consumer replays the stream: events already applied are skipped
-			// through status.observedStatusSeq.
-			DeliverPolicy: jetstream.DeliverAllPolicy,
-		})
+		cons, err := in.ensureStream(ctx, js)
 		if err == nil {
 			return cons, nil
 		}
-		in.Log.Warn("status consumer not ready, retrying", "stream", StatusStream, "err", err, "retry", in.SetupRetry)
+		in.Log.Warn("status stream not ready, retrying", "stream", StatusStream, "err", err, "retry", in.SetupRetry)
 		select {
 		case <-ctx.Done():
 			return nil, ctx.Err()
 		case <-time.After(in.SetupRetry):
 		}
 	}
+}
+
+func (in *Ingester) ensureStream(ctx context.Context, js jetstream.JetStream) (jetstream.Consumer, error) {
+	if _, err := js.CreateOrUpdateStream(ctx, StatusStreamConfig); err != nil {
+		return nil, fmt.Errorf("create or update stream: %w", err)
+	}
+	cons, err := js.CreateOrUpdateConsumer(ctx, StatusStream, jetstream.ConsumerConfig{
+		Durable:   ConsumerName,
+		AckPolicy: jetstream.AckExplicitPolicy,
+		// A new consumer replays the stream: events already applied are skipped
+		// through status.observedStatusSeq.
+		DeliverPolicy: jetstream.DeliverAllPolicy,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("create or update consumer %s: %w", ConsumerName, err)
+	}
+	return cons, nil
 }
 
 // nodeFromSubject returns <node> in orbit.edge.<node>.<kind>.
