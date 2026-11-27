@@ -16,8 +16,16 @@ of its `flux-system` (gitops/README.md), plus its per-cluster ConfigMap:
   compose), and `HUB_LEAF_URL`;
 - `orbit-hub` on the hub: `LEAF_SOURCE_RANGE`, the Docker network.
 
-The command is idempotent. It needs about 5 GB of RAM: stop the docker compose fleet first
-(`make dev-down`).
+The command is idempotent.
+
+**Requirements**:
+
+- About 5 GB of RAM: stop the docker compose fleet first (`make dev-down`).
+- **On Linux, `fs.inotify.max_user_instances` of at least 512.** The default is 128, and
+  four k3s clusters share it. When it runs out, a cluster's containerd never starts its
+  CRI service ("failed to create fsnotify watcher: too many open files"), and that cluster
+  waits forever with no node. `fleet.sh up` refuses to start below 512 and prints the
+  `sysctl` to run.
 
 ```bash
 make fleet-up                     # from GitHub main

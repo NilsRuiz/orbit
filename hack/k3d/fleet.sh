@@ -122,7 +122,23 @@ hub_leaf_ip() {
   kc "$HUB" -n nats get service nats-leafnodes -o jsonpath='{.status.loadBalancer.ingress[0].ip}'
 }
 
+# check_inotify refuses to start with a low inotify instance limit. Every k3s cluster uses
+# several, the limit is per user (root for all of them), and when it runs out a cluster's
+# containerd never starts its CRI service ("failed to create fsnotify watcher: too many
+# open files"): the cluster waits forever with no node.
+check_inotify() {
+  local want=512 have
+  have=$(sysctl -n fs.inotify.max_user_instances 2>/dev/null) || return 0 # not Linux
+  if [ "$have" -lt "$want" ]; then
+    echo "fs.inotify.max_user_instances is $have: four k3s clusters need about $want." >&2
+    echo "  sudo sysctl fs.inotify.max_user_instances=$want" >&2
+    echo "  (to keep it: echo 'fs.inotify.max_user_instances=$want' | sudo tee /etc/sysctl.d/99-inotify.conf)" >&2
+    exit 1
+  fi
+}
+
 up() {
+  check_inotify
   docker network inspect "$NET" >/dev/null 2>&1 || docker network create "$NET" >/dev/null
   if [ "$SOURCE" = local ]; then publish_local; fi
 
@@ -163,7 +179,8 @@ up() {
   for sat in "${SATS[@]}"; do
     local reach=""
     for _ in $(seq 90); do
-      reach=$(kc "$HUB" get edgenode "$sat" -o jsonpath='{.status.reachability}' 2>/dev/null)
+      # Not found yet is normal: the agent registers once its pod runs (|| true under set -e).
+      reach=$(kc "$HUB" get edgenode "$sat" -o jsonpath='{.status.reachability}' 2>/dev/null || true)
       [ "$reach" = Reachable ] && break
       sleep 2
     done
