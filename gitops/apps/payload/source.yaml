@@ -1,0 +1,22 @@
+# Where payload versions come from. The tag belongs to the agent (ADR-0009): Flux creates
+# this object once and never overwrites it (IfNotPresent), so the agent's tag is not
+# reverted as drift. Consequence: a change to this file is not applied to existing
+# clusters; delete the object to recreate it. Keep it minimal.
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: OCIRepository
+metadata:
+  name: payload
+  namespace: payload
+  annotations:
+    kustomize.toolkit.fluxcd.io/ssa: IfNotPresent
+spec:
+  interval: 1m
+  url: oci://ghcr.io/nilsruiz/orbit-payload
+  ref:
+    tag: "1.0.0" # initial version only; matches the agent's ORBIT_INITIAL_VERSION
+  # Only artifacts signed by this repository's payload workflow on main are applied.
+  verify:
+    provider: cosign
+    matchOIDCIdentity:
+      - issuer: ^https://token\.actions\.githubusercontent\.com$
+        subject: ^https://github\.com/NilsRuiz/orbit/\.github/workflows/payload\.yml@refs/heads/main$

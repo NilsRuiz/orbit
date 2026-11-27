@@ -1,0 +1,18 @@
+# Applies whichever payload version the OCIRepository points to. Health is judged by the
+# agent (source revision, this Kustomization's lastAppliedRevision, Deployment rollout),
+# not by `wait` here (ADR-0009).
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: payload
+  namespace: payload
+spec:
+  interval: 10m
+  retryInterval: 1m
+  timeout: 2m
+  prune: true
+  targetNamespace: payload
+  sourceRef:
+    kind: OCIRepository
+    name: payload
+  path: ./

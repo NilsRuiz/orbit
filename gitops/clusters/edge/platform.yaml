@@ -24,15 +24,12 @@ metadata:
   name: payload
   namespace: flux-system
 spec:
-  dependsOn:
-    - name: nats-leaf
+  # The payload source, its Kustomization and the agent's RBAC. The payload version
+  # itself is an OCI artifact chosen by the agent (ADR-0009), so nothing here is per node
+  # and nothing depends on the hub link.
   interval: 10m
   path: ./gitops/apps/payload
   prune: true
   sourceRef:
     kind: GitRepository
     name: flux-system
-  postBuild:
-    substituteFrom:
-      - kind: ConfigMap
-        name: orbit-node
