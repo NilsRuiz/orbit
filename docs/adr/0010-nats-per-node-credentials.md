@@ -1,6 +1,6 @@
 # ADR-0010: Per-node NATS credentials with decentralized JWT authentication
 
-- **Status**: Proposed
+- **Status**: Accepted
 - **Date**: 2026-11-28
 
 ## Context
