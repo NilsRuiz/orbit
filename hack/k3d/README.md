@@ -9,8 +9,17 @@ Two local setups. Both pin k3s to `v1.37.2-k3s1`, the Kubernetes minor envtest u
 - `orbit-fleet-hub` runs `gitops/clusters/hub`: NATS, then the operator;
 - `orbit-fleet-sat-1..3` run `gitops/clusters/edge`: leaf NATS, the payload, the agent.
 
-They share the Docker network `orbit-fleet`. Each cluster gets the single bootstrap apply
-of its `flux-system` (gitops/README.md), plus its per-cluster ConfigMap:
+They share the Docker network `orbit-fleet`. NATS is authenticated as in the cloud
+(ADR-0010).
+
+- **Keys**: on its first run, `up` creates **throwaway** keys for the local fleet, in
+  `~/.cache/orbit/fleet-nats` (`FLEET_NATS_KEYS`). They are kept apart from the real ones
+  (`~/.config/orbit/nats`): the local fleet never issues with those.
+- **Secrets**: `up` creates the hub's auth config, the operator's credentials and each
+  satellite's credentials as Secrets, unless they already exist.
+
+Each cluster gets the single bootstrap apply of its `flux-system` (gitops/README.md), plus
+its per-cluster ConfigMap:
 
 - `orbit-node` on each satellite: `NODE_ID`, `NODE_LABELS` (same constellations as docker
   compose), and `HUB_LEAF_URL`;
