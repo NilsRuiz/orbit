@@ -58,6 +58,8 @@ On the hub, every NATS client is trusted alike: no per-node credentials until ph
     recorded as a Kubernetes event on the `EdgeNode`.
   - Phase 3: per-node NATS credentials allowed to publish only on `orbit.edge.<node>.>`, so
     a node cannot speak for another.
+    *2026-11-28*: decided in [ADR-0010](0010-nats-per-node-credentials.md). Labels stay
+    self-asserted: credentials bind a node to its ID, not to its labels.
 - ➖ **API server load grows with the fleet.** Bounded by the write budget: about one
   write per node per minute in steady state.
 - ➖ **The agent's heartbeat format changes** (new fields). Old agents keep working: they
