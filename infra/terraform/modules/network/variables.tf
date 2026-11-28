@@ -4,32 +4,38 @@ variable "name" {
 }
 
 variable "region" {
-  type = string
+  description = "Region of the subnetwork."
+  type        = string
 }
 
 variable "nodes_cidr" {
-  type    = string
-  default = "10.10.0.0/20"
+  description = "Primary range: GKE nodes and edge VMs."
+  type        = string
+  default     = "10.10.0.0/20"
 }
 
 variable "pods_cidr" {
-  type    = string
-  default = "10.20.0.0/16"
+  description = "Secondary range for GKE pods."
+  type        = string
+  default     = "10.20.0.0/16"
 }
 
 variable "services_cidr" {
-  type    = string
-  default = "10.30.0.0/20"
+  description = "Secondary range for GKE services."
+  type        = string
+  default     = "10.30.0.0/20"
 }
 
 variable "hub_network_tag" {
-  type    = string
-  default = "orbit-hub"
+  description = "Network tag of the hub nodes."
+  type        = string
+  default     = "orbit-hub"
 }
 
 variable "edge_network_tag" {
-  type    = string
-  default = "orbit-edge"
+  description = "Network tag of the edge VMs."
+  type        = string
+  default     = "orbit-edge"
 }
 
 variable "enable_nat" {

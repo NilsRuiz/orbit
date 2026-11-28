@@ -23,7 +23,11 @@ jobs:
             echo "::endgroup::"
           done
       - uses: terraform-linters/setup-tflint@v6
-      - run: tflint --recursive --chdir infra/terraform
+        with:
+          tflint_version: v0.66.0 # pinned: "latest" lets a new release turn CI red
+      # --config is explicit: in --recursive mode tflint ignores infra/terraform/.tflint.hcl
+      # otherwise, and its rules (documented variables) silently do not run.
+      - run: tflint --recursive --chdir infra/terraform --config "$GITHUB_WORKSPACE/infra/terraform/.tflint.hcl"
       - name: checkov (security misconfigurations)
         run: pipx run checkov -d infra/terraform --quiet --compact --soft-fail
 
