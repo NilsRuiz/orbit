@@ -1,10 +1,12 @@
 variable "project_id" {
-  type = string
+  description = "GCP project ID (Workload Identity pool name)."
+  type        = string
 }
 
 variable "name" {
-  type    = string
-  default = "orbit-hub"
+  description = "Cluster name; also the node service account prefix."
+  type        = string
+  default     = "orbit-hub"
 }
 
 variable "zone" {
@@ -13,39 +15,47 @@ variable "zone" {
 }
 
 variable "network_id" {
-  type = string
+  description = "VPC network (network module)."
+  type        = string
 }
 
 variable "subnet_id" {
-  type = string
+  description = "Subnetwork (network module)."
+  type        = string
 }
 
 variable "pods_range_name" {
-  type = string
+  description = "Secondary range name for pods."
+  type        = string
 }
 
 variable "services_range_name" {
-  type = string
+  description = "Secondary range name for services."
+  type        = string
 }
 
 variable "network_tag" {
-  type    = string
-  default = "orbit-hub"
+  description = "Network tag of the hub nodes."
+  type        = string
+  default     = "orbit-hub"
 }
 
 variable "machine_type" {
-  type    = string
-  default = "e2-standard-2"
+  description = "Node machine type. e2-standard-2 fits NATS, the operator and Flux."
+  type        = string
+  default     = "e2-standard-2"
 }
 
 variable "min_nodes" {
-  type    = number
-  default = 1
+  description = "Autoscaling minimum of the spot pool."
+  type        = number
+  default     = 1
 }
 
 variable "max_nodes" {
-  type    = number
-  default = 2
+  description = "Autoscaling maximum of the spot pool."
+  type        = number
+  default     = 2
 }
 
 variable "private_nodes" {
@@ -55,8 +65,9 @@ variable "private_nodes" {
 }
 
 variable "master_ipv4_cidr_block" {
-  type    = string
-  default = "172.16.0.0/28"
+  description = "Control plane range, with private nodes only."
+  type        = string
+  default     = "172.16.0.0/28"
 }
 
 variable "master_authorized_cidrs" {
@@ -66,11 +77,13 @@ variable "master_authorized_cidrs" {
 }
 
 variable "deletion_protection" {
-  type    = bool
-  default = false
+  description = "Protect the cluster from deletion. Off for on-demand dev sessions (ADR-0005)."
+  type        = bool
+  default     = false
 }
 
 variable "labels" {
-  type    = map(string)
-  default = {}
+  description = "Labels on the cluster and its nodes."
+  type        = map(string)
+  default     = {}
 }

@@ -33,7 +33,10 @@ verify-tf: ## terraform fmt -check, validate (no backend), tflint
 	  echo "==> $$d"; \
 	  terraform -chdir=$$d init -backend=false -input=false >/dev/null && terraform -chdir=$$d validate || exit 1; \
 	done
-	@if command -v tflint >/dev/null; then tflint --recursive --chdir infra/terraform; \
+	@# --config is explicit: in --recursive mode tflint ignores .tflint.hcl otherwise.
+	@if command -v tflint >/dev/null; then tflint --recursive --chdir infra/terraform --config "$(CURDIR)/infra/terraform/.tflint.hcl"; \
+	elif command -v docker >/dev/null; then docker run --rm -v "$(CURDIR)/infra/terraform:/data" -w /data \
+	  ghcr.io/terraform-linters/tflint:v0.66.0 --recursive --config /data/.tflint.hcl; \
 	else echo "⚠️  tflint not installed: lint NOT verified"; fi
 
 verify-gitops: ## kustomize build | kubeconform for every kustomization

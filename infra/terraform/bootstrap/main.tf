@@ -6,7 +6,7 @@ terraform {
   required_providers {
     google = {
       source  = "hashicorp/google"
-      version = "~> 7.0"
+      version = "~> 8.12"
     }
   }
 }
@@ -17,8 +17,9 @@ variable "project_id" {
 }
 
 variable "region" {
-  type    = string
-  default = "europe-west1"
+  description = "Region of the state bucket."
+  type        = string
+  default     = "europe-west1"
 }
 
 provider "google" {

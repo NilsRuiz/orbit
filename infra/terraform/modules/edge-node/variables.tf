@@ -1,6 +1,7 @@
 variable "name_prefix" {
-  type    = string
-  default = "orbit"
+  description = "Prefix of the VM and service account names, e.g. orbit-dev."
+  type        = string
+  default     = "orbit"
 }
 
 variable "nodes" {
@@ -11,16 +12,19 @@ variable "nodes" {
 }
 
 variable "zone" {
-  type = string
+  description = "Zone of the edge VMs."
+  type        = string
 }
 
 variable "subnet_id" {
-  type = string
+  description = "Subnetwork the VMs attach to (network module)."
+  type        = string
 }
 
 variable "network_tag" {
-  type    = string
-  default = "orbit-edge"
+  description = "Network tag of the VMs, used by firewall rules."
+  type        = string
+  default     = "orbit-edge"
 }
 
 variable "machine_type" {
@@ -30,21 +34,24 @@ variable "machine_type" {
 }
 
 variable "image" {
-  type    = string
-  default = "debian-cloud/debian-12"
+  description = "Boot image. Debian 12: small, and k3s supports it."
+  type        = string
+  default     = "debian-cloud/debian-12"
 }
 
 variable "k3s_version" {
   type        = string
-  description = "Pinned k3s version, e.g. v1.33.5+k3s1. Never use 'latest' on a fleet."
+  description = "Pinned k3s version, e.g. v1.37.2+k3s1. Never use 'latest' on a fleet."
 }
 
 variable "public_ip" {
-  type    = bool
-  default = true
+  description = "Ephemeral public IP for egress (images, GitHub). Needed while Cloud NAT is off (ADR-0005)."
+  type        = bool
+  default     = true
 }
 
 variable "labels" {
-  type    = map(string)
-  default = {}
+  description = "Labels on every VM, on top of orbit-node-id and orbit-role."
+  type        = map(string)
+  default     = {}
 }

@@ -30,6 +30,20 @@ terraform apply
 terraform destroy
 ```
 
-After step 2, copy the `github_wif_provider` and `github_ci_service_account` outputs into
-the repository variables `GCP_WIF_PROVIDER` and `GCP_CI_SA` so CI can run `terraform plan`
-without any stored key.
+After step 2, set four repository variables (Settings → Secrets and variables → Actions →
+Variables), so CI runs `terraform plan` on pull requests with no stored key (Workload
+Identity Federation):
+
+| Variable | Value |
+|---|---|
+| `GCP_WIF_PROVIDER` | output `github_wif_provider` |
+| `GCP_CI_SA` | output `github_ci_service_account` |
+| `GCP_STATE_BUCKET` | output `state_bucket` of `bootstrap` |
+| `GCP_PROJECT_ID` | the project ID |
+
+The CI service account can only read (`roles/viewer`, `roles/iam.securityReviewer`) and use
+the state bucket: CI plans, it never applies.
+
+Provider versions are locked in each root module's `.terraform.lock.hcl` (Linux and macOS,
+amd64 and arm64). Upgrade them with `terraform init -upgrade`, then `terraform providers
+lock` for the four platforms, in a PR.

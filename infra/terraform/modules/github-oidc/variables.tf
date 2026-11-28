@@ -1,5 +1,6 @@
 variable "project_id" {
-  type = string
+  description = "GCP project ID."
+  type        = string
 }
 
 variable "github_repository" {
@@ -8,17 +9,20 @@ variable "github_repository" {
 }
 
 variable "state_bucket" {
-  type = string
+  description = "Terraform state bucket the CI service account reads and locks."
+  type        = string
 }
 
 variable "pool_id" {
-  type    = string
-  default = "github-actions"
+  description = "Workload Identity pool ID."
+  type        = string
+  default     = "github-actions"
 }
 
 variable "ci_service_account_id" {
-  type    = string
-  default = "orbit-ci"
+  description = "Account ID of the CI service account."
+  type        = string
+  default     = "orbit-ci"
 }
 
 variable "ci_project_roles" {

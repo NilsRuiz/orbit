@@ -36,6 +36,11 @@ repos:
     hooks:
       - id: terraform_fmt
       - id: terraform_tflint
+        args:
+          # Downloaded and cached by the hook, same version as CI: no local install needed.
+          - --hook-config=--tool-version=0.66.0
+          # Explicit, or the rules of .tflint.hcl (documented variables) do not run.
+          - --args=--config=__GIT_WORKING_DIR__/infra/terraform/.tflint.hcl
 
   - repo: https://github.com/shellcheck-py/shellcheck-py
     rev: v0.11.0.1-1

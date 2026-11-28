@@ -12,6 +12,9 @@ coverage.*
 !*.tfvars.example
 crash.log
 .terraform.lock.hcl.bak
+# Only root modules (envs/*, bootstrap) lock providers; reusable modules inherit the lock
+# of the root that calls them, and `terraform validate` in a module creates a stray one.
+infra/terraform/modules/**/.terraform.lock.hcl
 
 # Secrets
 *.pem
