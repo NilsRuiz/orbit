@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.0](https://github.com/NilsRuiz/orbit/compare/agent-v0.4.0...agent-v0.5.0) (2026-11-28)
+
+
+### Features
+
+* **agent:** issue per-node NATS credentials with tested permissions ([#105](https://github.com/NilsRuiz/orbit/issues/105)) ([a78f6fb](https://github.com/NilsRuiz/orbit/commit/a78f6fb4512f2f81689515d60c202f8b2f9ccafd))
+
 ## [0.4.0](https://github.com/NilsRuiz/orbit/compare/agent-v0.3.0...agent-v0.4.0) (2026-11-27)
 
 
