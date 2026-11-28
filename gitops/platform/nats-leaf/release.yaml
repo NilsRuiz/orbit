@@ -33,6 +33,10 @@ spec:
         resources:
           requests: { cpu: 50m, memory: 64Mi }
           limits: { memory: 256Mi }
+      patch:
+        - op: add
+          path: /volumeMounts/-
+          value: { name: nats-creds, mountPath: /etc/nats-creds, readOnly: true }
     config:
       # The hub refuses a second leaf connection with the same server name ("Duplicate
       # Remote LeafNode Connection"), and the default is the pod name, the same on every
@@ -48,6 +52,14 @@ spec:
         merge:
           remotes:
             - url: ${HUB_LEAF_URL}  # substituted by Flux postBuild
+              # The node's NATS user (ADR-0010): what this node may do on the hub. A
+              # Secret created at bootstrap, like the orbit-node ConfigMap.
+              credentials: /etc/nats-creds/node.creds
+    podTemplate:
+      patch:
+        - op: add
+          path: /spec/volumes/-
+          value: { name: nats-creds, secret: { secretName: nats-leaf-creds } }
     # No JetStream here: status events published while the link is down are lost, and the
     # next heartbeat re-syncs the current version. Local JetStream with a status stream
     # sourced into the hub is on the agent's roadmap (agent/README.md, store-and-forward).

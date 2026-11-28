@@ -42,6 +42,21 @@ spec:
         port: 7422
       monitor:
         enabled: true
+      # Authentication (ADR-0010): the operator, the system account and the account JWTs,
+      # from orbit-creds hub-config. Public, but per fleet: a Secret created at bootstrap
+      # (gitops/README.md), not Git. NATS does not start without it.
+      merge:
+        "$include": ../nats-auth/auth.conf
+    container:
+      patch:
+        - op: add
+          path: /volumeMounts/-
+          value: { name: nats-auth, mountPath: /etc/nats-auth, readOnly: true }
+    podTemplate:
+      patch:
+        - op: add
+          path: /spec/volumes/-
+          value: { name: nats-auth, secret: { secretName: nats-auth } }
     promExporter:
       enabled: true
 ---

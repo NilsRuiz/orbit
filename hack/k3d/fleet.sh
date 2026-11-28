@@ -117,6 +117,47 @@ configmap() { # configmap <cluster> <name> <key=value>...
     kc "$c" apply --server-side --force-conflicts -f - >/dev/null
 }
 
+# NATS credentials (ADR-0010). The local fleet has its own throwaway keys, apart from the
+# real ones (orbit-creds' default ~/.config/orbit/nats): it never issues with those.
+FLEET_NATS_KEYS=${FLEET_NATS_KEYS:-${XDG_CACHE_HOME:-$HOME/.cache}/orbit/fleet-nats}
+CREDS_BIN=""
+
+orbit_creds() {
+  if [ -z "$CREDS_BIN" ]; then
+    CREDS_BIN=$(mktemp -d)/orbit-creds
+    (cd "$root/agent" && go build -o "$CREDS_BIN" ./cmd/orbit-creds)
+  fi
+  "$CREDS_BIN" "$@" -keys "$FLEET_NATS_KEYS"
+}
+
+# secret_from creates Secret <name> in <namespace> from what an orbit-creds command writes,
+# unless it exists: re-issuing on every `up` would reconnect every leaf. The content goes
+# from a private temporary directory to the API, and is never printed.
+secret_from() { # secret_from <cluster> <namespace> <name> <key> <orbit-creds args...>
+  local c=$1 ns=$2 name=$3 key=$4 tmp
+  shift 4
+  kc "$c" create namespace "$ns" --dry-run=client -o yaml | kc "$c" apply --server-side -f - >/dev/null
+  if kc "$c" -n "$ns" get secret "$name" >/dev/null 2>&1; then
+    return
+  fi
+  tmp=$(mktemp -d)
+  if [ "$1" = hub-config ]; then
+    orbit_creds hub-config >"$tmp/$key"
+  else
+    orbit_creds "$@" -out "$tmp/$key"
+  fi
+  kc "$c" -n "$ns" create secret generic "$name" --from-file="$key=$tmp/$key" >/dev/null
+  rm -rf "$tmp"
+}
+
+# nats_keys creates the local fleet's keys on the first `up`.
+nats_keys() {
+  if ! orbit_creds hub-config >/dev/null 2>&1; then
+    orbit_creds init 2>/dev/null
+    log "local fleet NATS keys created in $FLEET_NATS_KEYS"
+  fi
+}
+
 # hub_leaf_ip is the hub leaf port's current address, for the link-cut rules.
 hub_leaf_ip() {
   kc "$HUB" -n nats get service nats-leafnodes -o jsonpath='{.status.loadBalancer.ingress[0].ip}'
@@ -145,6 +186,10 @@ up() {
   cluster_up "$HUB"
   # Satellites reach the hub's leaf port from the Docker network, not the GCP edge subnet.
   configmap "$HUB" orbit-hub "LEAF_SOURCE_RANGE=$(docker network inspect "$NET" -f '{{(index .IPAM.Config 0).Subnet}}')"
+  # Before the bootstrap: NATS and the operator need them to start.
+  nats_keys
+  secret_from "$HUB" nats nats-auth auth.conf hub-config
+  secret_from "$HUB" operator-system orbit-operator-nats operator.creds operator
   bootstrap "$HUB" hub
   log "hub: waiting for NATS and the operator"
   wait_ready "$HUB" flux-system nats-hub operator
@@ -165,6 +210,7 @@ up() {
     cluster_up "orbit-fleet-$sat"
     configmap "orbit-fleet-$sat" orbit-node "NODE_ID=$sat" "NODE_LABELS=${LABELS[$sat]}" \
       "HUB_LEAF_URL=nats-leaf://$hub_leaf"
+    secret_from "orbit-fleet-$sat" nats nats-leaf-creds node.creds node -node "$sat"
     bootstrap "orbit-fleet-$sat" edge
     # Substitute the possibly new HUB_LEAF_URL now rather than at the next interval.
     kc "orbit-fleet-$sat" -n flux-system annotate --overwrite kustomization nats-leaf \
@@ -209,12 +255,19 @@ link() { # link <cut|restore> <node>
   local box="k3d-orbit-fleet-$node-server-0"
   local rules=("-d $ip -p tcp --dport 7422" "-s $ip -p tcp --sport 7422")
   local r
+  # raw PREROUTING, not FORWARD: kube-router (k3s network policies) periodically moves its
+  # own jump back to the top of FORWARD, and its chain accepts pod traffic before a DROP
+  # there. The cut then silently ended after a minute or two. raw PREROUTING is the first
+  # hook, before connection tracking, and nothing in k3s manages it.
   for r in "${rules[@]}"; do
     # shellcheck disable=SC2086 # the rule is a list of iptables arguments
+    while docker exec "$box" iptables -t raw -D PREROUTING $r -m comment --comment "$LINK_RULE" -j DROP 2>/dev/null; do :; done
+    # Rules of an older fleet.sh, in FORWARD.
+    # shellcheck disable=SC2086
     while docker exec "$box" iptables -D FORWARD $r -m comment --comment "$LINK_RULE" -j DROP 2>/dev/null; do :; done
     if [ "$1" = cut ]; then
       # shellcheck disable=SC2086
-      docker exec "$box" iptables -I FORWARD $r -m comment --comment "$LINK_RULE" -j DROP
+      docker exec "$box" iptables -t raw -I PREROUTING $r -m comment --comment "$LINK_RULE" -j DROP
     fi
   done
   if [ "$1" = cut ]; then log "$node: link cut (traffic to $ip:7422 silently dropped)"; else log "$node: link restored"; fi
