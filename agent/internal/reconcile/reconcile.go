@@ -5,6 +5,7 @@ package reconcile
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"sync/atomic"
@@ -26,11 +27,25 @@ type Applier interface {
 }
 
 // HealthChecker reports whether the payload is healthy on the given version. When it is
-// not, a non-nil error says why (a check that failed, or a version still on its way); the
-// last one is reported with the rollback.
+// not, the error says why: NotReady(reason) for the payload's state (a version still on its
+// way, a pod never ready), any other error for a check that failed. The rollback reports
+// the last NotReady reason, else the last error.
 type HealthChecker interface {
 	Healthy(ctx context.Context, version string) (bool, error)
 }
+
+// notReady is a HealthChecker's reason why the payload is not healthy yet, as opposed to
+// an error while checking (an API call that failed).
+type notReady struct{ reason string }
+
+func (e notReady) Error() string { return e.reason }
+
+// NotReady says why the payload is not healthy yet. A rollback reports the last such
+// reason in preference to later check errors, which say nothing about the payload.
+func NotReady(reason string) error { return notReady{reason} }
+
+// IsNotReady reports whether err is a NotReady reason.
+func IsNotReady(err error) bool { return errors.As(err, new(notReady)) }
 
 // Store persists state between restarts.
 type Store interface {
@@ -156,21 +171,29 @@ func (r *Reconciler) verify(ctx context.Context, version string) (bool, error) {
 	ticker := time.NewTicker(r.cfg.VerifyInterval)
 	defer ticker.Stop()
 
-	var why error
+	// The last reason the payload is not healthy (NotReady), and the last error while
+	// checking. A check failing near the deadline (cut short, rate-limited) says nothing
+	// about the payload: the reason wins over it.
+	var reason, checkErr error
 	for {
 		ok, err := r.health.Healthy(deadline, version)
 		if ok {
 			return true, nil
 		}
-		// A check cut short by the deadline says nothing about the payload: keep the
-		// previous reason.
-		if err != nil && deadline.Err() == nil {
-			why = err
+		switch {
+		case IsNotReady(err):
+			reason = err
 			r.log.Debug("not healthy yet", "version", version, "reason", err)
+		case err != nil && deadline.Err() == nil:
+			checkErr = err
+			r.log.Debug("health check failed", "version", version, "err", err)
 		}
 		select {
 		case <-deadline.Done():
-			return false, why
+			if reason != nil {
+				return false, reason
+			}
+			return false, checkErr
 		case <-ticker.C:
 		}
 	}

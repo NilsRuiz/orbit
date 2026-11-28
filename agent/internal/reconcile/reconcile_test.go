@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"log/slog"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -118,6 +119,48 @@ func TestReconcile_RollbackReportsWhyUnhealthy(t *testing.T) {
 	want := "not healthy within 50ms: deployment: 1 old replicas pending termination"
 	if last.Phase != state.PhaseRolledBack || last.Message != want {
 		t.Fatalf("last status = %s %q, want rolled-back %q", last.Phase, last.Message, want)
+	}
+}
+
+// flakyHealth says why the payload is not healthy, then fails like an API call near the
+// deadline (seen on k3d: client-go's rate limiter refuses to wait past it).
+type flakyHealth struct{ calls atomic.Int32 }
+
+func (f *flakyHealth) Healthy(_ context.Context, _ string) (bool, error) {
+	if f.calls.Add(1) <= 3 {
+		return false, NotReady("deployment: 1 old replicas pending termination")
+	}
+	return false, errors.New("get ocirepositories payload/payload: client rate limiter Wait returned an error: rate: Wait(n=1) would exceed context deadline")
+}
+
+func TestReconcile_RollbackKeepsWhyNotReadyOverLaterErrors(t *testing.T) {
+	rep := &memReporter{}
+	cfg := Config{NodeID: "sat-test", VerifyTimeout: 100 * time.Millisecond, VerifyInterval: 5 * time.Millisecond}
+	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+	h := &flakyHealth{}
+	r := New(cfg, state.State{Current: "1.0.0", Phase: state.PhaseIdle}, &memStore{}, &fakeApplier{}, h, rep, log)
+
+	if err := r.Reconcile(context.Background(), Desired{Version: "6.6.6"}); err != nil {
+		t.Fatal(err)
+	}
+	if h.calls.Load() <= 3 {
+		t.Fatalf("health checked %d times: the test needs errors after the not-ready reasons", h.calls.Load())
+	}
+	last := rep.statuses[len(rep.statuses)-1]
+	want := "not healthy within 100ms: deployment: 1 old replicas pending termination"
+	if last.Message != want {
+		t.Fatalf("rollback message = %q, want %q", last.Message, want)
+	}
+}
+
+func TestReconcile_RollbackReportsAnErrorWhenNoReason(t *testing.T) {
+	h := fakeHealth{unhealthy: "6.6.6", reason: "list deployments: connection refused"} // a plain error
+	r, rep := newTest(state.State{Current: "1.0.0", Phase: state.PhaseIdle}, &fakeApplier{}, h)
+	if err := r.Reconcile(context.Background(), Desired{Version: "6.6.6"}); err != nil {
+		t.Fatal(err)
+	}
+	if last := rep.statuses[len(rep.statuses)-1]; last.Message != "not healthy within 50ms: list deployments: connection refused" {
+		t.Fatalf("rollback message = %q", last.Message)
 	}
 }
 

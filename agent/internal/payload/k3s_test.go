@@ -13,6 +13,8 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
+
+	"github.com/NilsRuiz/orbit/agent/internal/reconcile"
 )
 
 // The tests run against a real kube-apiserver (envtest) with the pinned Flux CRDs, so a
@@ -207,9 +209,12 @@ func TestK3sHealthy(t *testing.T) {
 			if got != tt.want {
 				t.Errorf("Healthy = %v (%v), want %v", got, err, tt.want)
 			}
-			// Not healthy always comes with a reason; healthy never does.
+			// Not healthy always comes with a NotReady reason; healthy never does.
 			if (err == nil) != got {
 				t.Errorf("Healthy = %v with error %v: want a reason exactly when not healthy", got, err)
+			}
+			if !got && !reconcile.IsNotReady(err) {
+				t.Errorf("not healthy with %v, want a reconcile.NotReady reason", err)
 			}
 		})
 	}
@@ -221,6 +226,10 @@ func TestK3sHealthyMissingObjects(t *testing.T) {
 		_, err := driver(ns).Healthy(context.Background(), version)
 		if err == nil || !strings.Contains(err.Error(), "not found") {
 			t.Fatalf("Healthy error = %v, want not found", err)
+		}
+		// A missing object is a broken setup, not a payload state.
+		if reconcile.IsNotReady(err) {
+			t.Errorf("a missing source is reported as NotReady: %v", err)
 		}
 	})
 	t.Run("no kustomization", func(t *testing.T) {
