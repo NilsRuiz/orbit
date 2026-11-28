@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.1](https://github.com/NilsRuiz/orbit/compare/agent-v0.5.0...agent-v0.5.1) (2026-11-28)
+
+
+### Bug Fixes
+
+* **agent:** keep why the payload was unhealthy over late check errors ([#107](https://github.com/NilsRuiz/orbit/issues/107)) ([ef00bc4](https://github.com/NilsRuiz/orbit/commit/ef00bc4a4af3475c93cd2b94bc806e72a0cb751d))
+
 ## [0.5.0](https://github.com/NilsRuiz/orbit/compare/agent-v0.4.0...agent-v0.5.0) (2026-11-28)
 
 
