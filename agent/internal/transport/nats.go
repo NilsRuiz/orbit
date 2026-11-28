@@ -18,6 +18,11 @@ import (
 // DesiredBucket is the hub KV bucket holding one desired state per node (key = node ID).
 const DesiredBucket = "orbit-desired"
 
+// InboxPrefix is the node's own prefix for reply subjects (core requests and JetStream
+// API replies), instead of the shared "_INBOX". A node's credentials allow it to subscribe
+// only under its own prefix, so it cannot read another node's replies (ADR-0010).
+func InboxPrefix(nodeID string) string { return "_INBOX_" + nodeID }
+
 // StatusSubject is where a node publishes its status events (stream ORBIT_STATUS).
 func StatusSubject(nodeID string) string { return fmt.Sprintf("orbit.edge.%s.status", nodeID) }
 
@@ -37,6 +42,7 @@ type NATS struct {
 func Connect(url, nodeID, credsFile, jsDomain string, log *slog.Logger) (*NATS, error) {
 	opts := []nats.Option{
 		nats.Name("orbit-agent-" + nodeID),
+		nats.CustomInboxPrefix(InboxPrefix(nodeID)),
 		nats.MaxReconnects(-1),
 		nats.ReconnectWait(2 * time.Second),
 		nats.RetryOnFailedConnect(true),
