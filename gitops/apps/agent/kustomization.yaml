@@ -11,4 +11,4 @@ resources:
 images:
   - name: orbit-agent
     newName: ghcr.io/nilsruiz/orbit-agent
-    newTag: "0.5.0" # per-node inbox prefix, required by the NATS credentials (ADR-0010)
+    newTag: "0.5.1" # >= 0.5.0: per-node inbox prefix, required by the NATS credentials (ADR-0010)
