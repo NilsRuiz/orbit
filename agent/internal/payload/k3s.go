@@ -3,7 +3,6 @@ package payload
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -18,6 +17,8 @@ import (
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
+
+	"github.com/NilsRuiz/orbit/agent/internal/reconcile"
 )
 
 // Flux and Kubernetes resources the driver touches (ADR-0009). The API versions are
@@ -75,15 +76,16 @@ func (k K3s) Apply(ctx context.Context, version string) error {
 
 // Healthy reports whether version is running: the source fetched it, the Kustomization
 // applied that exact revision, and the Deployment finished rolling it out. When it is not,
-// the error says why (reconcile.HealthChecker), e.g. "deployment: 1 old replicas pending
-// termination" for a new pod that never becomes ready.
+// the error says why: reconcile.NotReady with the payload's state, e.g. "deployment: 1 old
+// replicas pending termination" for a new pod that never becomes ready, or a plain error
+// when an API call failed.
 func (k K3s) Healthy(ctx context.Context, version string) (bool, error) {
 	reason, err := k.notReady(ctx, version)
 	if err != nil {
 		return false, err
 	}
 	if reason != "" {
-		return false, errors.New(reason)
+		return false, reconcile.NotReady(reason)
 	}
 	return true, nil
 }
