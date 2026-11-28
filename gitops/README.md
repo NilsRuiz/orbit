@@ -24,8 +24,9 @@ Flux pulls this public repository **without credentials**, and manages its own i
 from `clusters/<cluster>/flux-system`. This replaces `flux bootstrap github`, which needs a
 write token per cluster.
 
-**The hub**, once the cluster exists and `get-credentials` has run: one apply, the only
-manual one on a cloud cluster. Everything after it comes from Git.
+**The hub**, once the cluster exists and `get-credentials` has run: its two NATS Secrets
+(see below), then one apply, the only manual one on a cloud cluster. Everything after it
+comes from Git.
 
 ```bash
 kubectl apply --server-side -k gitops/clusters/hub/flux-system
@@ -42,7 +43,8 @@ flux get kustomizations --watch   # flux-system, then nats-hub, then operator
 - **The KV bucket** `orbit-desired` appears with the first `Rollout` (the operator creates
   it on first use). Until then agents wait for it; the status stream exists from the start.
 
-**An edge cluster** needs its `orbit-node` ConfigMap first, then the same single apply.
+**An edge cluster** needs its `orbit-node` ConfigMap and its NATS credentials Secret
+first, then the same single apply.
 On the edge VMs, their startup script runs both (#90). Locally, `make fleet-up` does
 (hack/k3d/README.md).
 
@@ -61,6 +63,26 @@ clusters. Flux substitutes them (`postBuild`):
 |---|---|---|
 | `orbit-node` | each edge cluster, required | `NODE_ID` (DNS-1123 label), `NODE_LABELS` (`orbit.io/*`, comma-separated), `HUB_LEAF_URL` |
 | `orbit-hub` | the hub, optional | `LEAF_SOURCE_RANGE`: who may open a leaf connection, default the GCP edge subnet `10.10.0.0/20` |
+
+**NATS credentials** ([ADR-0010](../docs/adr/0010-nats-per-node-credentials.md)) are
+Secrets created before the bootstrap apply. They are issued with `orbit-creds`
+(`agent/README.md`), whose keys stay offline. **Required**: the hub's NATS and the
+operator do not start without theirs, and a leaf without its node's credentials is refused
+by the hub.
+
+| Secret | Cluster, namespace | Key | From |
+|---|---|---|---|
+| `nats-auth` | hub, `nats` | `auth.conf` | `orbit-creds hub-config` (public JWTs) |
+| `orbit-operator-nats` | hub, `operator-system` | `operator.creds` | `orbit-creds operator -out …` |
+| `nats-leaf-creds` | each edge cluster, `nats` | `node.creds` | `orbit-creds node -node <id> -out …` |
+
+```bash
+kubectl create namespace nats
+kubectl -n nats create secret generic nats-leaf-creds --from-file=node.creds=sat-1.creds
+```
+
+Adding a satellite changes nothing on the hub: issue its credentials, create its Secret,
+bootstrap it.
 
 Versions of the `payload` app on edge nodes are **not** changed through Git. Each version
 is a signed OCI artifact built from [`payload/`](../payload/). The operator writes the

@@ -16,3 +16,15 @@ patches:
       - op: add
         path: /spec/template/spec/containers/0/args/-
         value: --nats-url=nats://nats.nats.svc.cluster.local:4222
+      # Its NATS user (ADR-0010), from a Secret created at bootstrap (gitops/README.md).
+      - op: add
+        path: /spec/template/spec/containers/0/args/-
+        value: --nats-creds=/etc/nats-creds/operator.creds
+      - op: add
+        path: /spec/template/spec/containers/0/volumeMounts
+        value:
+          - { name: nats-creds, mountPath: /etc/nats-creds, readOnly: true }
+      - op: add
+        path: /spec/template/spec/volumes
+        value:
+          - { name: nats-creds, secret: { secretName: orbit-operator-nats } }
