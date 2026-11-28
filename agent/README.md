@@ -11,6 +11,8 @@ internal/state/       A/B state persisted atomically on disk (survives reboots/p
 internal/reconcile/   state machine: idle → applying → verifying → idle | rolled-back
 internal/transport/   NATS: KV watch, status to JetStream, heartbeats
 internal/payload/     payload drivers: Sim (docker compose), K3s (Flux OCIRepository tag)
+internal/natsauth/    per-node NATS credentials and permissions (ADR-0010)
+cmd/orbit-creds/      issues them
 ```
 
 ## Development
@@ -38,7 +40,7 @@ about 20 s.
 |---|---|---|
 | `ORBIT_NODE_ID` | — (required) | Node identity, e.g. `sat-1`. Must be a DNS-1123 label: it names the `EdgeNode` and is a NATS subject token |
 | `ORBIT_NATS_URL` | `nats://127.0.0.1:4222` | Local leaf node |
-| `ORBIT_NATS_CREDS` | — | NATS credentials file (phase 3) |
+| `ORBIT_NATS_CREDS` | — | NATS credentials file, when connecting straight to an authenticated server. On an edge cluster the node's credentials are on its leaf connection instead (see below) |
 | `ORBIT_JS_DOMAIN` | `hub` | Hub JetStream domain, reached through the leaf node |
 | `ORBIT_STATE_DIR` | `/var/lib/orbit` | Where `state.json` lives |
 | `ORBIT_INITIAL_VERSION` | `1.0.0` | Version assumed on first boot |
@@ -73,6 +75,42 @@ artifact built from [`payload/`](../payload/).
 
 **`sim`** pretends: applying takes 2 s, and versions in `ORBIT_SIM_BAD_VERSIONS` are
 unhealthy.
+
+## NATS credentials
+
+The hub authenticates each node with its own NATS user
+([ADR-0010](../docs/adr/0010-nats-per-node-credentials.md)). The node's credentials are on
+its **leaf connection**: the agent talks to its local leaf without credentials, and the
+leaf's user limits what the node can do on the hub.
+
+| A node may | Subjects |
+|---|---|
+| send its heartbeats and status events | `orbit.edge.<node>.>` |
+| watch its own desired state, in domain `hub` | `$JS.hub.API.STREAM.INFO.KV_orbit-desired`, `$JS.hub.API.CONSUMER.CREATE.KV_orbit-desired.*.$KV.orbit-desired.<node>` |
+| receive its own replies | `_INBOX_<node>.>`: the agent's inbox prefix (`transport.InboxPrefix`) |
+
+Everything else is denied. That includes:
+
+- another node's subjects, inbox and desired state;
+- every key at once (`*`, `>`);
+- direct KV reads, which the agent does not need: it only watches.
+
+`internal/natsauth/natsauth_integration_test.go` runs the agent's real transport through an
+authenticated leaf node, and proves each denial next to a control that works. Change
+`natsauth.NodePermissions` only with a test.
+
+`orbit-creds` issues them:
+
+```bash
+go run ./cmd/orbit-creds init                               # operator + account keys, once
+go run ./cmd/orbit-creds hub-config > auth.conf             # public JWTs, for the hub
+go run ./cmd/orbit-creds node -node sat-1 -out sat-1.creds  # secret, mode 0600
+go run ./cmd/orbit-creds operator -out operator.creds
+```
+
+The keys go in `$ORBIT_NATS_KEYS`, by default `~/.config/orbit/nats`, readable by their
+owner only. Keep them offline and backed up: losing them means re-issuing every
+credential. `init` never replaces existing keys.
 
 ## Messages
 
